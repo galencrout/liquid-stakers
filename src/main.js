@@ -47,7 +47,11 @@ class StakeInvadersScene extends Phaser.Scene {
     this.createLogoTextures();
 
     this.roundEnded = false;
-    this.roundStartedAt = this.time.now;
+    this.gameStarted = false;
+    this.roundStartedAt = null;
+    this.introStage = 1;
+    this.musicStarted = false;
+    this.musicStep = 0;
     this.mode = MODE_DELEGATED;
     this.baseLagMs = 1200;
     this.currentLagMs = this.baseLagMs;
@@ -77,9 +81,11 @@ class StakeInvadersScene extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys({
       a: Phaser.Input.Keyboard.KeyCodes.A,
       d: Phaser.Input.Keyboard.KeyCodes.D,
+      h: Phaser.Input.Keyboard.KeyCodes.H,
       one: Phaser.Input.Keyboard.KeyCodes.ONE,
       two: Phaser.Input.Keyboard.KeyCodes.TWO,
       r: Phaser.Input.Keyboard.KeyCodes.R,
+      enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
       space: Phaser.Input.Keyboard.KeyCodes.SPACE,
     });
 
@@ -90,6 +96,9 @@ class StakeInvadersScene extends Phaser.Scene {
         this.scene.restart();
       }
     });
+    this.input.keyboard.on("keydown-H", () => this.toggleHelpOverlay());
+    this.input.keyboard.on("keydown-ENTER", () => this.advanceIntroOrStart());
+    this.input.keyboard.on("keydown-SPACE", () => this.advanceIntroOrStart());
 
     this.hudPanel = this.add
       .rectangle(GAME_WIDTH / 2, 22, GAME_WIDTH - 20, 34, 0x050913, 0.75)
@@ -111,16 +120,16 @@ class StakeInvadersScene extends Phaser.Scene {
       .setVisible(false);
     this.controlsHint = this.add
       .text(
-        GAME_WIDTH / 2,
+        14,
         GAME_HEIGHT - 20,
         "Move: Arrows/A,D  Fire: Space  Modes: 1 Delegated 2 stVaults",
         { fontSize: "14px", color: "#a9bfdc" }
       )
-      .setOrigin(0.5)
+      .setOrigin(0, 0.5)
       .setDepth(20);
-    this.modeFlash = this.add
-      .text(GAME_WIDTH / 2, 72, "INSTANT LIQUIDITY ACTIATED", {
-        fontSize: "26px",
+    this.modeTopFlash = this.add
+      .text(GAME_WIDTH / 2, 72, "", {
+        fontSize: "22px",
         color: "#ffffff",
         backgroundColor: "#1a9be8",
         padding: { left: 12, right: 12, top: 6, bottom: 6 },
@@ -129,10 +138,48 @@ class StakeInvadersScene extends Phaser.Scene {
       .setDepth(30)
       .setAlpha(0)
       .setVisible(false);
+    this.modeBottomPrompt = this.add
+      .text(GAME_WIDTH / 2, 106, "", {
+        fontSize: "18px",
+        color: "#d5f4ff",
+        backgroundColor: "#123657",
+        padding: { left: 10, right: 10, top: 4, bottom: 4 },
+      })
+      .setOrigin(0.5)
+      .setDepth(30)
+      .setAlpha(0)
+      .setVisible(false);
+    this.delegatedInputBadge = this.add
+      .text(GAME_WIDTH - 12, GAME_HEIGHT - 8, "Delegated Staking", {
+        fontSize: "15px",
+        color: "#ffe2e2",
+        backgroundColor: "#4b1f1f",
+        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+      })
+      .setOrigin(1, 1)
+      .setDepth(26)
+      .setAlpha(0.8);
+    this.stvaultsInputBadge = this.add
+      .text(GAME_WIDTH - 12, GAME_HEIGHT - 8, "stVaults", {
+        fontSize: "15px",
+        color: "#d6f8ff",
+        backgroundColor: "#113b62",
+        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+      })
+      .setOrigin(1, 1)
+      .setDepth(26)
+      .setAlpha(0.8);
 
     this.endGroup = this.add.container(0, 0);
+    this.createIntroOverlay();
+    this.createHelpOverlay();
+    this.updateInputBadgeVisibility();
     this.updateModeVisuals();
     this.updateHUD();
+    this.startMusic();
+
+    this.events.on("shutdown", () => this.stopMusic());
+    this.events.on("destroy", () => this.stopMusic());
   }
 
   background() {
@@ -210,6 +257,178 @@ class StakeInvadersScene extends Phaser.Scene {
     lido.destroy();
   }
 
+  createIntroOverlay() {
+    this.modalBackdrop = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x01030a, 0.72)
+      .setDepth(38)
+      .setVisible(true);
+
+    this.introPanel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 730, 470, 0x02060f, 1)
+      .setStrokeStyle(2, 0x3f5e8a, 0.9);
+    this.introTitle = this.add.text(GAME_WIDTH / 2, 170, "Liquid Stakers", {
+      fontSize: "40px",
+      color: "#f4fbff",
+    }).setOrigin(0.5);
+    this.introBody = this.add.text(
+      GAME_WIDTH / 2,
+      200,
+      "",
+      {
+        fontSize: "16px",
+        color: "#d7e9ff",
+        align: "center",
+        wordWrap: { width: 640 },
+        lineSpacing: 8,
+      }
+    ).setOrigin(0.5, 0);
+    this.introHint = this.add.text(
+      GAME_WIDTH / 2,
+      500,
+      "",
+      {
+        fontSize: "20px",
+        color: "#7de2ff",
+        align: "center",
+        wordWrap: { width: 660 },
+      }
+    ).setOrigin(0.5);
+
+    this.introContinueBox = this.add.rectangle(GAME_WIDTH / 2, 500, 260, 40, 0x16365a, 0.88)
+      .setStrokeStyle(1, 0x74d7ff, 0.8);
+
+    this.introGroup = this.add.container(0, 0, [
+      this.introPanel,
+      this.introTitle,
+      this.introBody,
+      this.introContinueBox,
+      this.introHint,
+    ]).setDepth(40);
+
+    this.showIntroStage(1);
+  }
+
+  showIntroStage(stage) {
+    if (!this.introGroup) return;
+    this.introStage = stage;
+
+    if (stage === 1) {
+      this.introTitle.setText("Liquid Stakers");
+      this.introBody.setText(
+        "Welcome to Liquid Stakers-a game to understand the opportunity costs of the Ethereum Exit Queue.\n\nIn traditional staking, users are subject to rate limits when they want to unwind their position."
+      );
+      this.introHint.setText("[press space to continue]");
+      this.introContinueBox.setDisplaySize(330, 40);
+    } else if (stage === 2) {
+      this.introTitle.setText("Why It Matters");
+      this.introBody.setText(
+        "It can take days (or months!) to exit a native or delegated staking setup.\n\nWith stVaults stakers can liquidate their staking position in seconds.\n\nWhy is this important? Markets are dynamic. Reaction time is everything."
+      );
+      this.introHint.setText("[press space for rules]");
+      this.introContinueBox.setDisplaySize(320, 40);
+    } else {
+      this.introTitle.setText("Rules");
+      this.introBody.setText(
+        "Survive 60 seconds and score points by clearing invaders.\n\nBlue enemies: 1 shot. Red enemies: 2 shots. Green enemies: 3 shots.\n\nMode 1 (Delegated): delayed inputs plus random lag spikes.\nMode 2 (stVaults): instant input response.\n\nIf enemies reach your validator zone, the round ends."
+      );
+      this.introHint.setText("[press space to start]");
+      this.introContinueBox.setDisplaySize(295, 40);
+    }
+
+    this.introTitle.setY(170);
+    this.introBody.setY(200);
+    this.introContinueBox.setY(500);
+    this.introHint.setY(500);
+  }
+
+  advanceIntroOrStart() {
+    if (this.roundEnded || this.helpGroup?.visible) return;
+    if (this.gameStarted) return;
+    this.ensureAudioRunning();
+    if (this.introStage === 1) {
+      this.showIntroStage(2);
+      return;
+    }
+    if (this.introStage === 2) {
+      this.showIntroStage(3);
+      return;
+    }
+    this.startGame();
+  }
+
+  createHelpOverlay() {
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 340, 0x071122, 0.96)
+      .setStrokeStyle(2, 0x3c5f8f, 0.9);
+    const title = this.add.text(GAME_WIDTH / 2, 176, "Help", {
+      fontSize: "32px",
+      color: "#f3fbff",
+    }).setOrigin(0.5);
+    const body = this.add.text(
+      GAME_WIDTH / 2,
+      270,
+      "Controls: Arrows or A/D move, Space shoots, 1/2 switch modes.\nDelegated mode applies delayed inputs with random lag spikes.\nstVaults mode applies inputs instantly.\nBlue enemies take 1 shot, red 2, green 3.",
+      {
+        fontSize: "18px",
+        color: "#dcecff",
+        align: "center",
+        wordWrap: { width: 580 },
+        lineSpacing: 9,
+      }
+    ).setOrigin(0.5);
+    const close = this.add.text(GAME_WIDTH / 2, 386, "Press H to close", {
+      fontSize: "18px",
+      color: "#7de2ff",
+    }).setOrigin(0.5);
+
+    this.helpGroup = this.add.container(0, 0, [panel, title, body, close]).setDepth(39).setVisible(false);
+  }
+
+  toggleHelpOverlay() {
+    if (!this.gameStarted || this.introGroup) return;
+    if (this.roundEnded) return;
+    if (!this.helpGroup) return;
+    const next = !this.helpGroup.visible;
+    this.helpGroup.setVisible(next);
+    this.helpGroup.setAlpha(next ? 1 : 0);
+    if (this.modalBackdrop) {
+      this.modalBackdrop.setVisible(next);
+    }
+    if (next) {
+      this.helpGroup.setAlpha(0);
+      this.tweens.add({
+        targets: this.helpGroup,
+        alpha: 1,
+        duration: 120,
+      });
+    }
+  }
+
+  startGame() {
+    if (this.gameStarted || this.roundEnded) return;
+    this.ensureAudioRunning();
+    this.gameStarted = true;
+    this.roundStartedAt = this.time.now;
+    this.lastRawInput = null;
+    this.inputQueue.length = 0;
+    if (this.introGroup) {
+      this.tweens.add({
+        targets: this.introGroup,
+        alpha: 0,
+        duration: 180,
+        onComplete: () => {
+          this.introGroup.destroy();
+          this.introGroup = null;
+          if (this.modalBackdrop && !this.helpGroup?.visible) {
+            this.modalBackdrop.setVisible(false);
+          }
+          if (this.mode === MODE_DELEGATED) {
+            this.flashDelegatedActivation();
+          } else {
+            this.flashModeActivation();
+          }
+        },
+      });
+    }
+  }
+
   playShootSound() {
     const ctx = this.sound?.context;
     if (!ctx) return;
@@ -240,6 +459,88 @@ class StakeInvadersScene extends Phaser.Scene {
       osc.disconnect();
       gain.disconnect();
     };
+  }
+
+  midiToHz(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  playMusicNote(midi, duration, type, gainLevel, detune = 0) {
+    const ctx = this.sound?.context;
+    if (!ctx || midi == null) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(this.midiToHz(midi), now);
+    osc.detune.setValueAtTime(detune, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(gainLevel, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  tickMusic() {
+    const bass = [40, 43, 47, 43, 38, 42, 45, 42];
+    const counter = [64, 67, 69, 71, 72, 71, 69, 67, 66, 67, 69, 71, 72, 74, 71, 69];
+    const arpeggio = [76, 72, 74, 69, 71, 67, 69, 64];
+
+    const b = bass[this.musicStep % bass.length];
+    const c = counter[this.musicStep % counter.length];
+    const a = arpeggio[(this.musicStep * 2) % arpeggio.length];
+
+    this.playMusicNote(b, 0.19, "triangle", 0.0275, 0);
+    this.playMusicNote(c, 0.14, "square", 0.0163, Phaser.Math.Between(-6, 6));
+
+    if (this.musicStep % 2 === 0) {
+      this.playMusicNote(a, 0.11, "sawtooth", 0.0113, Phaser.Math.Between(-10, 10));
+    }
+
+    // Glitch accent for a retro-electronic edge.
+    if (this.musicStep % 16 === 7 || Phaser.Math.Between(0, 28) === 0) {
+      this.playMusicNote(c + 12, 0.05, "square", 0.01, Phaser.Math.Between(-120, 120));
+    }
+
+    this.musicStep += 1;
+  }
+
+  startMusic() {
+    if (this.musicStarted) return;
+    const ctx = this.sound?.context;
+    if (!ctx) return;
+    this.musicStarted = true;
+    this.musicStep = 0;
+    this.musicEvent = this.time.addEvent({
+      delay: 180,
+      loop: true,
+      callback: this.tickMusic,
+      callbackScope: this,
+    });
+  }
+
+  stopMusic() {
+    if (this.musicEvent) {
+      this.musicEvent.remove(false);
+      this.musicEvent = null;
+    }
+    this.musicStarted = false;
+  }
+
+  ensureAudioRunning() {
+    const ctx = this.sound?.context;
+    if (!ctx) return;
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
   }
 
   createEnemies() {
@@ -290,6 +591,7 @@ class StakeInvadersScene extends Phaser.Scene {
       this.currentLagMs = this.baseLagMs;
       this.nextLagSpikeAt = this.time.now + Phaser.Math.Between(3000, 6500);
     }
+    this.updateInputBadgeVisibility();
     this.updateModeVisuals();
     this.updateHUD();
 
@@ -301,53 +603,84 @@ class StakeInvadersScene extends Phaser.Scene {
     }
   }
 
-  flashModeActivation() {
-    this.tweens.killTweensOf(this.modeFlash);
-    this.modeFlash
-      .setText("INSTANT LIQUIDITY ACTIATED")
-      .setStyle({ backgroundColor: "#1a9be8" })
-      .setVisible(true)
-      .setAlpha(1)
-      .setScale(0.9);
+  updateInputBadgeVisibility() {
+    const delegated = this.mode === MODE_DELEGATED;
+    this.delegatedInputBadge.setText("Delegated Staking");
+    this.stvaultsInputBadge.setText("stVaults");
+    this.delegatedInputBadge.setVisible(delegated);
+    this.stvaultsInputBadge.setVisible(!delegated);
+  }
+
+  flashInputBadge() {
+    const target = this.mode === MODE_DELEGATED ? this.delegatedInputBadge : this.stvaultsInputBadge;
+    const flashText = this.mode === MODE_DELEGATED ? "Delayed Reaction" : "Instant Liquidity";
+    const idleText = this.mode === MODE_DELEGATED ? "Delegated Staking" : "stVaults";
+    this.tweens.killTweensOf(target);
+    target.setText(flashText);
+    target.setAlpha(1).setScale(1.03);
     this.tweens.add({
-      targets: this.modeFlash,
+      targets: target,
+      alpha: 0.8,
       scaleX: 1,
       scaleY: 1,
-      duration: 90,
-      ease: "Back.Out",
-    });
-    this.tweens.add({
-      targets: this.modeFlash,
-      alpha: 0,
-      delay: 650,
-      duration: 260,
-      ease: "Quad.In",
-      onComplete: () => this.modeFlash.setVisible(false),
+      duration: 170,
+      ease: "Quad.Out",
+      onComplete: () => target.setText(idleText),
     });
   }
 
+  flashModeActivation() {
+    this.flashModeNotice(
+      "stVaults Mode (Instant Liquidity)",
+      'Press "1" for delegated mode',
+      "#1a9be8",
+      "#113b62"
+    );
+  }
+
   flashDelegatedActivation() {
-    this.tweens.killTweensOf(this.modeFlash);
-    this.modeFlash
-      .setText("Delegate staking: exit queue in effect")
-      .setStyle({ backgroundColor: "#b94949" })
+    this.flashModeNotice(
+      "Delegated Staking Mode (Exit Queue In Effect)",
+      'Press "2" for liquid mode',
+      "#b94949",
+      "#4b1f1f"
+    );
+  }
+
+  flashModeNotice(topText, bottomText, topBg, bottomBg) {
+    this.tweens.killTweensOf(this.modeTopFlash);
+    this.tweens.killTweensOf(this.modeBottomPrompt);
+
+    this.modeTopFlash
+      .setText(topText)
+      .setStyle({ backgroundColor: topBg })
       .setVisible(true)
       .setAlpha(1)
-      .setScale(0.9);
+      .setScale(0.94);
+    this.modeBottomPrompt
+      .setText(bottomText)
+      .setStyle({ backgroundColor: bottomBg })
+      .setVisible(true)
+      .setAlpha(1)
+      .setScale(0.94);
+
     this.tweens.add({
-      targets: this.modeFlash,
+      targets: [this.modeTopFlash, this.modeBottomPrompt],
       scaleX: 1,
       scaleY: 1,
       duration: 90,
       ease: "Back.Out",
     });
     this.tweens.add({
-      targets: this.modeFlash,
+      targets: [this.modeTopFlash, this.modeBottomPrompt],
       alpha: 0,
-      delay: 680,
-      duration: 260,
+      delay: 1230,
+      duration: 390,
       ease: "Quad.In",
-      onComplete: () => this.modeFlash.setVisible(false),
+      onComplete: () => {
+        this.modeTopFlash.setVisible(false);
+        this.modeBottomPrompt.setVisible(false);
+      },
     });
   }
 
@@ -393,6 +726,9 @@ class StakeInvadersScene extends Phaser.Scene {
     if (!changed) return;
 
     this.lastRawInput = raw;
+    if (this.gameStarted && !this.roundEnded) {
+      this.flashInputBadge();
+    }
     this.inputQueue.push({
       tApply: now + this.currentLagMs,
       moveX: raw.moveX,
@@ -565,7 +901,7 @@ class StakeInvadersScene extends Phaser.Scene {
   }
 
   updateHUD() {
-    const elapsed = this.time.now - this.roundStartedAt;
+    const elapsed = this.gameStarted && this.roundStartedAt ? this.time.now - this.roundStartedAt : 0;
     const remaining = Math.max(0, ROUND_LENGTH_MS - elapsed);
     const modeLabel = this.mode === MODE_DELEGATED ? "Delegated" : "stVaults";
     this.hudText.setText(
@@ -582,6 +918,14 @@ class StakeInvadersScene extends Phaser.Scene {
       this.updateHUD();
       return;
     }
+    if (!this.gameStarted) {
+      this.updateHUD();
+      return;
+    }
+    if (this.helpGroup?.visible) {
+      this.updateHUD();
+      return;
+    }
 
     this.sampleLag(now);
     this.enqueueInput(now);
@@ -593,7 +937,7 @@ class StakeInvadersScene extends Phaser.Scene {
     this.updateEnemies(deltaSec);
     this.resolveCollisions();
 
-    if (now - this.roundStartedAt >= ROUND_LENGTH_MS) {
+    if (this.roundStartedAt && now - this.roundStartedAt >= ROUND_LENGTH_MS) {
       this.endRound("Time expired while queue pressure remained.");
     }
 

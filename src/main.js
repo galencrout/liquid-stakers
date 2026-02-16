@@ -325,7 +325,7 @@ class StakeInvadersScene extends Phaser.Scene {
     } else if (stage === 2) {
       this.introTitle.setText("Why It Matters");
       this.introBody.setText(
-        "It can take days (or months!) to exit a native or delegated staking setup.\n\nWith stVaults stakers can liquidate their staking position in seconds.\n\nWhy is this important? Markets are dynamic. Reaction time is everything."
+        "It can take days (or months!) to exit a native or delegated staking setup.\n\nWith stVaults, stakers can adjust their position on demand - in seconds.\n\nWhy is this important? Markets are dynamic. Reaction time is everything."
       );
       this.introHint.setText("[press space for rules]");
       this.introContinueBox.setDisplaySize(320, 40);

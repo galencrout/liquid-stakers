@@ -42,14 +42,14 @@ class StakeInvadersScene extends Phaser.Scene {
     super("StakeInvaders");
   }
 
-  create() {
+  create(data = {}) {
     this.background();
     this.createLogoTextures();
 
     this.roundEnded = false;
     this.gameStarted = false;
     this.roundStartedAt = null;
-    this.introStage = 1;
+    this.introStage = data?.difficultyOnly ? 4 : 1;
     this.musicStarted = false;
     this.musicStep = 0;
     this.mode = MODE_DELEGATED;
@@ -84,21 +84,15 @@ class StakeInvadersScene extends Phaser.Scene {
       h: Phaser.Input.Keyboard.KeyCodes.H,
       one: Phaser.Input.Keyboard.KeyCodes.ONE,
       two: Phaser.Input.Keyboard.KeyCodes.TWO,
-      r: Phaser.Input.Keyboard.KeyCodes.R,
       enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
       space: Phaser.Input.Keyboard.KeyCodes.SPACE,
     });
 
-    this.input.keyboard.on("keydown-ONE", () => this.setMode(MODE_DELEGATED));
-    this.input.keyboard.on("keydown-TWO", () => this.setMode(MODE_STVAULTS));
-    this.input.keyboard.on("keydown-R", () => {
-      if (this.roundEnded) {
-        this.scene.restart();
-      }
-    });
+    this.input.keyboard.on("keydown-ONE", () => this.handleDifficultyChoice(MODE_DELEGATED));
+    this.input.keyboard.on("keydown-TWO", () => this.handleDifficultyChoice(MODE_STVAULTS));
     this.input.keyboard.on("keydown-H", () => this.toggleHelpOverlay());
-    this.input.keyboard.on("keydown-ENTER", () => this.advanceIntroOrStart());
-    this.input.keyboard.on("keydown-SPACE", () => this.advanceIntroOrStart());
+    this.input.keyboard.on("keydown-ENTER", () => this.handlePrimaryAction());
+    this.input.keyboard.on("keydown-SPACE", () => this.handlePrimaryAction());
 
     this.hudPanel = this.add
       .rectangle(GAME_WIDTH / 2, 22, GAME_WIDTH - 20, 34, 0x050913, 0.75)
@@ -108,6 +102,17 @@ class StakeInvadersScene extends Phaser.Scene {
       fontSize: "16px",
       color: "#f2f8ff",
     }).setDepth(21);
+    this.switchModeHintBg = this.add
+      .rectangle(GAME_WIDTH / 2, 54, 360, 24, 0x10233d, 0.9)
+      .setStrokeStyle(1, 0x3f618d, 0.9)
+      .setDepth(21);
+    this.switchModeHint = this.add
+      .text(GAME_WIDTH / 2, 46, "", {
+        fontSize: "13px",
+        color: "#d8ebff",
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(22);
     this.spikeBadge = this.add
       .text(GAME_WIDTH - 18, 11, "SPIKE", {
         fontSize: "15px",
@@ -122,7 +127,7 @@ class StakeInvadersScene extends Phaser.Scene {
       .text(
         14,
         GAME_HEIGHT - 20,
-        "Move: Arrows/A,D  Fire: Space  Modes: 1 Delegated 2 stVaults",
+        "Move: Arrows/A,D  Fire: Space",
         { fontSize: "14px", color: "#a9bfdc" }
       )
       .setOrigin(0, 0.5)
@@ -303,7 +308,7 @@ class StakeInvadersScene extends Phaser.Scene {
       this.introHint,
     ]).setDepth(40);
 
-    this.showIntroStage(1);
+    this.showIntroStage(this.introStage);
   }
 
   showIntroStage(stage) {
@@ -324,13 +329,20 @@ class StakeInvadersScene extends Phaser.Scene {
       );
       this.introHint.setText("[press space for rules]");
       this.introContinueBox.setDisplaySize(320, 40);
-    } else {
+    } else if (stage === 3) {
       this.introTitle.setText("Rules");
       this.introBody.setText(
-        "Survive 60 seconds and score points by clearing invaders.\n\nBlue enemies: 1 shot. Red enemies: 2 shots. Green enemies: 3 shots.\n\nMode 1 (Delegated): delayed inputs plus random lag spikes.\nMode 2 (stVaults): instant input response.\n\nIf enemies reach your validator zone, the round ends."
+        "Survive 60 seconds and score points by clearing invaders.\n\nBlue enemies: 1 shot. Red enemies: 2 shots. Green enemies: 3 shots.\n\nDelegated mode applies delayed inputs plus random lag spikes.\nstVaults mode applies instant input response.\n\nIf enemies reach your validator zone, the round ends."
       );
-      this.introHint.setText("[press space to start]");
-      this.introContinueBox.setDisplaySize(295, 40);
+      this.introHint.setText("[press space to choose difficulty]");
+      this.introContinueBox.setDisplaySize(430, 40);
+    } else {
+      this.introTitle.setText("Choose a Difficulty");
+      this.introBody.setText(
+        "1. Delegated Staking (Exit Queue Lag)\n\n2. stVaults Staking (Instant Liquidity)"
+      );
+      this.introHint.setText('[press 1 or 2 to start]');
+      this.introContinueBox.setDisplaySize(300, 40);
     }
 
     this.introTitle.setY(170);
@@ -339,8 +351,12 @@ class StakeInvadersScene extends Phaser.Scene {
     this.introHint.setY(500);
   }
 
-  advanceIntroOrStart() {
-    if (this.roundEnded || this.helpGroup?.visible) return;
+  handlePrimaryAction() {
+    if (this.helpGroup?.visible) return;
+    if (this.roundEnded) {
+      this.returnToDifficultySelection();
+      return;
+    }
     if (this.gameStarted) return;
     this.ensureAudioRunning();
     if (this.introStage === 1) {
@@ -351,7 +367,20 @@ class StakeInvadersScene extends Phaser.Scene {
       this.showIntroStage(3);
       return;
     }
+    if (this.introStage === 3) {
+      this.showIntroStage(4);
+    }
+  }
+
+  handleDifficultyChoice(mode) {
+    if (this.roundEnded || this.helpGroup?.visible || this.gameStarted) return;
+    if (!this.introGroup || this.introStage !== 4) return;
+    this.setMode(mode);
     this.startGame();
+  }
+
+  returnToDifficultySelection() {
+    this.scene.restart({ difficultyOnly: true });
   }
 
   createHelpOverlay() {
@@ -364,7 +393,7 @@ class StakeInvadersScene extends Phaser.Scene {
     const body = this.add.text(
       GAME_WIDTH / 2,
       270,
-      "Controls: Arrows or A/D move, Space shoots, 1/2 switch modes.\nDelegated mode applies delayed inputs with random lag spikes.\nstVaults mode applies inputs instantly.\nBlue enemies take 1 shot, red 2, green 3.",
+      "Controls: Arrows or A/D move, Space shoots.\nChoose Delegated or stVaults on the difficulty screen before each round.\nBlue enemies take 1 shot, red 2, green 3.",
       {
         fontSize: "18px",
         color: "#dcecff",
@@ -579,7 +608,6 @@ class StakeInvadersScene extends Phaser.Scene {
 
   setMode(mode) {
     if (this.roundEnded) return;
-    const prevMode = this.mode;
     this.mode = mode;
     if (mode === MODE_STVAULTS) {
       this.baseLagMs = 0;
@@ -594,13 +622,6 @@ class StakeInvadersScene extends Phaser.Scene {
     this.updateInputBadgeVisibility();
     this.updateModeVisuals();
     this.updateHUD();
-
-    if (mode === MODE_STVAULTS && prevMode !== MODE_STVAULTS) {
-      this.flashModeActivation();
-    }
-    if (mode === MODE_DELEGATED && prevMode !== MODE_DELEGATED) {
-      this.flashDelegatedActivation();
-    }
   }
 
   updateInputBadgeVisibility() {
@@ -632,7 +653,7 @@ class StakeInvadersScene extends Phaser.Scene {
   flashModeActivation() {
     this.flashModeNotice(
       "stVaults Mode (Instant Liquidity)",
-      'Press "1" for delegated mode',
+      "Difficulty selected for this round",
       "#1a9be8",
       "#113b62"
     );
@@ -641,7 +662,7 @@ class StakeInvadersScene extends Phaser.Scene {
   flashDelegatedActivation() {
     this.flashModeNotice(
       "Delegated Staking Mode (Exit Queue In Effect)",
-      'Press "2" for liquid mode',
+      "Difficulty selected for this round",
       "#b94949",
       "#4b1f1f"
     );
@@ -892,7 +913,7 @@ class StakeInvadersScene extends Phaser.Scene {
       wordWrap: { width: 520 },
     }).setOrigin(0.5);
 
-    const restart = this.add.text(GAME_WIDTH / 2, 444, "Press R to restart", {
+    const restart = this.add.text(GAME_WIDTH / 2, 444, "Press SPACE to choose difficulty", {
       fontSize: "24px",
       color: "#ff9f9f",
     }).setOrigin(0.5);
@@ -904,9 +925,14 @@ class StakeInvadersScene extends Phaser.Scene {
     const elapsed = this.gameStarted && this.roundStartedAt ? this.time.now - this.roundStartedAt : 0;
     const remaining = Math.max(0, ROUND_LENGTH_MS - elapsed);
     const modeLabel = this.mode === MODE_DELEGATED ? "Delegated" : "stVaults";
+    const modeHint =
+      this.mode === MODE_DELEGATED
+        ? "Difficulty: Delegated Staking (chosen in intro)"
+        : "Difficulty: stVaults Staking (chosen in intro)";
     this.hudText.setText(
       `Score ${this.score}   Time ${(remaining / 1000).toFixed(1)}s   Mode ${modeLabel}   Lag ${Math.round(this.currentLagMs)}ms`
     );
+    this.switchModeHint.setText(modeHint);
     this.spikeBadge.setVisible(this.inLagSpike);
   }
 

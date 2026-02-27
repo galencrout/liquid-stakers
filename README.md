@@ -1,46 +1,47 @@
-# Liquid Stakers
+# LivingRoom Slides (MVP)
 
-Phaser 3 + Vite arcade demo that compares delayed delegated-control feel vs instant stVaults control.
+Browser-based skeuomorphic slideshow studio with analog projector feel.
 
-## Setup
+## What is implemented
 
-1. Install Node.js 18+.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run dev server:
-   ```bash
-   npm run dev
-   ```
-4. Build for production:
-   ```bash
-   npm run build
-   ```
-5. Preview build:
-   ```bash
-   npm run preview
-   ```
+- Multi-image upload (`jpg/png/webp/heic` if browser supports decoding)
+- Drag-and-drop slide ordering
+- Skeuomorphic "living room projector" canvas scene
+- Analog audio simulation (projector hum + transition clunk)
+- Playback controls (auto/manual, speed, looping, keyboard shortcuts)
+- Webcam presenter overlay
+- In-browser recording export (`webm`) with aspect presets (16:9, 9:16, 1:1)
+
+## Run locally
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Start dev server:
+
+```bash
+npm run dev
+```
+
+3. Build production bundle:
+
+```bash
+npm run build
+```
 
 ## Controls
 
-- `Left/Right` or `A/D`: move
-- `Space`: shoot (220ms cooldown)
-- `1`: Delegated mode (800-2000ms lag + occasional spikes)
-- `2`: stVaults mode (0ms lag)
-- `R`: restart after round ends
+- `Space` or `Right Arrow`: next slide
+- `Left Arrow`: previous slide
+- `F`: toggle fullscreen
+- `M`: mute/unmute
 
-## Gameplay
+## Notes and current limits
 
-- 60-second round on a single 800x600 screen.
-- Clear invaders for points.
-- Round ends if enemies reach the player zone or timer expires.
-- HUD shows score, remaining time, mode, current lag, and `SPIKE` when lag spikes are active.
-
-## Share on the internet (GitHub Pages)
-
-1. Push this repo to GitHub (default branch: `main`).
-2. In GitHub, open `Settings` -> `Pages`, and set **Source** to **GitHub Actions**.
-3. Push to `main` again (or run the workflow manually from `Actions`).
-4. Your live URL will be:
-   `https://<your-github-username>.github.io/<repo-name>/`
+- This MVP is fully client-side (no backend persistence).
+- "Share link" hosting and album integrations (Google/Apple Photos) are not yet implemented.
+- Recording is exported as `webm`; transcoding to `mp4` would require a backend job or local ffmpeg step.
+- Webcam + mic permissions are required for presenter recording.

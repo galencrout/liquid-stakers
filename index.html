@@ -3,10 +3,111 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Liquid Stakers</title>
+    <title>Choose Game</title>
+    <style>
+      :root {
+        color: #eaf3ff;
+        background: radial-gradient(circle at 20% 20%, #293a57, #141018 60%);
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+
+      .chooser {
+        width: min(1200px, 100%);
+        display: grid;
+        gap: 14px;
+      }
+
+      .title {
+        margin: 0;
+        text-align: center;
+        font-size: clamp(24px, 3.2vw, 42px);
+        letter-spacing: 0.3px;
+      }
+
+      .subtitle {
+        margin: 0;
+        text-align: center;
+        color: #aecaec;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .card {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        text-decoration: none;
+        border: 1px solid #4d6f9d;
+        background: rgba(8, 18, 34, 0.85);
+        color: inherit;
+      }
+
+      .card:hover {
+        border-color: #77b0eb;
+        background: rgba(14, 29, 53, 0.92);
+      }
+
+      .poster {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        border: 1px solid #36547d;
+        display: block;
+        background: #0a1629;
+      }
+
+      .label {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .desc {
+        margin: 0;
+        color: #b7cdea;
+        line-height: 1.35;
+      }
+
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <main class="chooser">
+      <h1 class="title">Choose Your Game</h1>
+      <p class="subtitle">Pick one mode to launch.</p>
+
+      <section class="grid">
+        <a class="card" href="/liquid-stakers.html" aria-label="Play Liquid Stakers">
+          <img class="poster" src="/src/assets/liquid-stakers-poster.png" alt="Liquid Stakers poster" />
+          <div class="label">Liquid Stakers</div>
+          <p class="desc">Arcade space defense with delegated-vs-liquid responsiveness.</p>
+        </a>
+
+        <a class="card" href="/eth-chomp.html" aria-label="Play Stake-Man">
+          <img class="poster" src="/src/assets/stake-man-poster.png" alt="Stake-Man poster" />
+          <div class="label">Stake-Man</div>
+          <p class="desc">Pac-Man style ETH chomp maze with queue-gated Regular mode.</p>
+        </a>
+      </section>
+    </main>
   </body>
 </html>

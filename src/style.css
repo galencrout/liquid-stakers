@@ -1,7 +1,7 @@
 :root {
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   color: #e9f1ff;
-  background: radial-gradient(circle at 20% 20%, #1d2c48, #080b15 55%);
+  background: radial-gradient(circle at 20% 20%, #1d2c48, #080b15 56%);
 }
 
 * {
@@ -18,6 +18,7 @@ body {
 #app {
   width: 800px;
   max-width: 100vw;
+  padding: 8px;
 }
 
 canvas {

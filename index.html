@@ -42,6 +42,13 @@
         color: #aecaec;
       }
 
+      .instructions {
+        margin: 0;
+        text-align: center;
+        color: #d4e7ff;
+        font-size: 18px;
+      }
+
       .grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -56,11 +63,20 @@
         border: 1px solid #4d6f9d;
         background: rgba(8, 18, 34, 0.85);
         color: inherit;
+        transition: border-color 120ms ease, background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
       }
 
-      .card:hover {
+      .card:hover,
+      .card.is-selected {
         border-color: #77b0eb;
         background: rgba(14, 29, 53, 0.92);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(53, 121, 194, 0.22);
+      }
+
+      .card.is-selected {
+        border-color: #9ee3ff;
+        box-shadow: 0 0 0 2px rgba(122, 220, 255, 0.5), 0 10px 28px rgba(53, 121, 194, 0.3);
       }
 
       .poster {
@@ -94,20 +110,80 @@
     <main class="chooser">
       <h1 class="title">Choose Your Game</h1>
       <p class="subtitle">Pick one mode to launch.</p>
+      <p class="instructions">Use the joystick to choose. Press A or Start to launch. Press B to stay here.</p>
 
       <section class="grid">
-        <a class="card" href="./liquid-stakers.html" aria-label="Play Liquid Stakers">
+        <a class="card is-selected" href="./liquid-stakers.html" aria-label="Play Liquid Stakers" data-card="0">
           <img class="poster" src="./src/assets/liquid-stakers-poster.png" alt="Liquid Stakers poster" />
           <div class="label">Liquid Stakers</div>
           <p class="desc">Arcade space defense with delegated-vs-liquid responsiveness.</p>
         </a>
 
-        <a class="card" href="./eth-chomp.html" aria-label="Play Stake-Man">
+        <a class="card" href="./eth-chomp.html" aria-label="Play Stake-Man" data-card="1">
           <img class="poster" src="./src/assets/stake-man-poster.png" alt="Stake-Man poster" />
           <div class="label">Stake-Man</div>
           <p class="desc">Pac-Man style ETH chomp maze with queue-gated Regular mode.</p>
         </a>
       </section>
     </main>
+    <script>
+      const cards = [...document.querySelectorAll(".card")];
+      let selectedIndex = 0;
+      let padAxis = 0;
+      let padButtons = {};
+
+      function selectCard(index) {
+        selectedIndex = (index + cards.length) % cards.length;
+        cards.forEach((card, i) => card.classList.toggle("is-selected", i === selectedIndex));
+      }
+
+      function getPrimaryPad() {
+        return [...(navigator.getGamepads?.() ?? [])].find(Boolean) ?? null;
+      }
+
+      function consumeButtonEdge(name, isDown) {
+        const wasDown = !!padButtons[name];
+        padButtons[name] = isDown;
+        return isDown && !wasDown;
+      }
+
+      function launchSelected() {
+        window.location.href = cards[selectedIndex].href;
+      }
+
+      function pollPad() {
+        const pad = getPrimaryPad();
+        if (!pad) {
+          padAxis = 0;
+          requestAnimationFrame(pollPad);
+          return;
+        }
+
+        const axis = pad.axes[0] ?? 0;
+        const nextAxis = axis <= -0.45 ? -1 : axis >= 0.45 ? 1 : 0;
+        if (nextAxis !== 0 && nextAxis !== padAxis) selectCard(selectedIndex + nextAxis);
+        padAxis = nextAxis;
+
+        const leftPressed = consumeButtonEdge("left", !!pad.buttons[14]?.pressed);
+        const rightPressed = consumeButtonEdge("right", !!pad.buttons[15]?.pressed);
+        const confirmPressed =
+          consumeButtonEdge("a", !!pad.buttons[0]?.pressed) ||
+          consumeButtonEdge("start", !!pad.buttons[9]?.pressed);
+
+        if (leftPressed) selectCard(selectedIndex - 1);
+        if (rightPressed) selectCard(selectedIndex + 1);
+        if (confirmPressed) launchSelected();
+
+        requestAnimationFrame(pollPad);
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft") selectCard(selectedIndex - 1);
+        if (e.key === "ArrowRight") selectCard(selectedIndex + 1);
+        if (e.key === "Enter" || e.key === " ") launchSelected();
+      });
+
+      pollPad();
+    </script>
   </body>
 </html>

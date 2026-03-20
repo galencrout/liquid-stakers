@@ -30,6 +30,7 @@ const MODE_DELEGATED = "Delegated (Exit Queue Lag)";
 const MODE_STVAULTS = "stVaults (Instant Control)";
 const TEX_ETH = "logo-eth";
 const TEX_LIDO = "logo-lido";
+const HOME_URL = "./index.html";
 const ENEMY_TIERS = [
   { hp: 3, tint: 0x6efc87 }, // Green: 3 hits
   { hp: 3, tint: 0x6efc87 },
@@ -54,6 +55,7 @@ class StakeInvadersScene extends Phaser.Scene {
     this.musicStarted = false;
     this.musicStep = 0;
     this.mode = MODE_DELEGATED;
+    this.pendingAutoStartMode = data?.autoStartMode ?? null;
     this.baseLagMs = 1200;
     this.currentLagMs = this.baseLagMs;
     this.inLagSpike = false;
@@ -64,6 +66,11 @@ class StakeInvadersScene extends Phaser.Scene {
     this.playerState = { moveX: 0, shoot: false };
     this.gamepadButtons = {};
     this.gamepadStickHeld = false;
+    this.gamepadVerticalHeld = false;
+    this.startSelectHeld = false;
+    this.menuOpen = false;
+    this.menuIndex = 0;
+    this.menuOptions = [];
 
     this.score = 0;
     this.lastFireAt = -BULLET_COOLDOWN_MS;
@@ -130,7 +137,7 @@ class StakeInvadersScene extends Phaser.Scene {
       .text(
         14,
         GAME_HEIGHT - 20,
-        "Move: Arrows/A,D  Fire: Space",
+        "Arcade: Stick moves, A fires, L/R pick difficulty, Start or Select opens menu",
         { fontSize: "14px", color: "#a9bfdc" }
       )
       .setOrigin(0, 0.5)
@@ -181,10 +188,16 @@ class StakeInvadersScene extends Phaser.Scene {
     this.endGroup = this.add.container(0, 0);
     this.createIntroOverlay();
     this.createHelpOverlay();
+    this.createPauseMenu();
     this.updateInputBadgeVisibility();
     this.updateModeVisuals();
     this.updateHUD();
     this.startMusic();
+
+    if (this.pendingAutoStartMode) {
+      this.setMode(this.pendingAutoStartMode);
+      this.startGame();
+    }
 
     this.events.on("shutdown", () => this.stopMusic());
     this.events.on("destroy", () => this.stopMusic());
@@ -323,29 +336,29 @@ class StakeInvadersScene extends Phaser.Scene {
       this.introBody.setText(
         "Welcome to Liquid Stakers-a game to understand the opportunity costs of the Ethereum Exit Queue.\n\nIn traditional staking, users are subject to rate limits when they want to unwind their position."
       );
-      this.introHint.setText("[press space to continue]");
+      this.introHint.setText("[press A or Start to continue]");
       this.introContinueBox.setDisplaySize(330, 40);
     } else if (stage === 2) {
       this.introTitle.setText("Why It Matters");
       this.introBody.setText(
         "It can take days (or months!) to exit a native or delegated staking setup.\n\nWith stVaults, stakers can adjust their position on demand - in seconds.\n\nWhy is this important? Markets are dynamic. Reaction time is everything."
       );
-      this.introHint.setText("[press space for rules]");
+      this.introHint.setText("[press A or Start for rules]");
       this.introContinueBox.setDisplaySize(320, 40);
     } else if (stage === 3) {
       this.introTitle.setText("Rules");
       this.introBody.setText(
         "Survive 60 seconds and score points by clearing invaders.\n\nBlue enemies: 1 shot. Red enemies: 2 shots. Green enemies: 3 shots.\n\nDelegated mode applies delayed inputs plus random lag spikes.\nstVaults mode applies instant input response.\n\nIf enemies reach your validator zone, the round ends."
       );
-      this.introHint.setText("[press space to choose difficulty]");
+      this.introHint.setText("[press A or Start to choose difficulty]");
       this.introContinueBox.setDisplaySize(430, 40);
     } else {
       this.introTitle.setText("Choose a Difficulty");
       this.introBody.setText(
-        "1. Delegated Staking (Exit Queue Lag)\n\n2. stVaults Staking (Instant Liquidity)"
+        "Press L or move left for Delegated Staking.\n\nPress R or move right for stVaults."
       );
-      this.introHint.setText('[press 1 or 2 to start]');
-      this.introContinueBox.setDisplaySize(300, 40);
+      this.introHint.setText("[L = Delegated, R = stVaults, B = back]");
+      this.introContinueBox.setDisplaySize(420, 40);
     }
 
     this.introTitle.setY(170);
@@ -355,6 +368,10 @@ class StakeInvadersScene extends Phaser.Scene {
   }
 
   handlePrimaryAction() {
+    if (this.menuOpen) {
+      this.activatePauseSelection();
+      return;
+    }
     if (this.helpGroup?.visible) return;
     if (this.roundEnded) {
       this.returnToDifficultySelection();
@@ -383,6 +400,7 @@ class StakeInvadersScene extends Phaser.Scene {
   }
 
   returnToDifficultySelection() {
+    this.closePauseMenu();
     this.scene.restart({ difficultyOnly: true });
   }
 
@@ -396,7 +414,7 @@ class StakeInvadersScene extends Phaser.Scene {
     const body = this.add.text(
       GAME_WIDTH / 2,
       270,
-      "Controls: Arrows or A/D move, Space shoots.\nChoose Delegated or stVaults on the difficulty screen before each round.\nBlue enemies take 1 shot, red 2, green 3.",
+      "Controls: arcade stick moves, A fires, L chooses Delegated, R chooses stVaults.\nPress Start or Select during a run to open the game menu.\nBlue enemies take 1 shot, red 2, green 3.",
       {
         fontSize: "18px",
         color: "#dcecff",
@@ -405,12 +423,78 @@ class StakeInvadersScene extends Phaser.Scene {
         lineSpacing: 9,
       }
     ).setOrigin(0.5);
-    const close = this.add.text(GAME_WIDTH / 2, 386, "Press H to close", {
+    const close = this.add.text(GAME_WIDTH / 2, 386, "Press B, A, Start, or Select to close", {
       fontSize: "18px",
       color: "#7de2ff",
     }).setOrigin(0.5);
 
     this.helpGroup = this.add.container(0, 0, [panel, title, body, close]).setDepth(39).setVisible(false);
+  }
+
+  createPauseMenu() {
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 440, 300, 0x081325, 0.97)
+      .setStrokeStyle(2, 0x61a9f0, 0.92);
+    const title = this.add.text(GAME_WIDTH / 2, 188, "Game Menu", {
+      fontSize: "32px",
+      color: "#f3fbff",
+    }).setOrigin(0.5);
+    this.pauseMenuItems = [0, 1, 2, 3].map((i) =>
+      this.add.text(GAME_WIDTH / 2, 238 + i * 34, "", {
+        fontSize: "22px",
+        color: "#d4e8ff",
+      }).setOrigin(0.5)
+    );
+    const footer = this.add.text(GAME_WIDTH / 2, 360, "Stick: move   A/Start: choose   B: close", {
+      fontSize: "16px",
+      color: "#7de2ff",
+    }).setOrigin(0.5);
+
+    this.pauseMenuGroup = this.add
+      .container(0, 0, [panel, title, ...this.pauseMenuItems, footer])
+      .setDepth(41)
+      .setVisible(false);
+  }
+
+  openPauseMenu() {
+    this.menuOptions = [
+      { label: "Resume", action: () => this.closePauseMenu() },
+      { label: "Restart Round", action: () => this.scene.restart({ difficultyOnly: true, autoStartMode: this.mode }) },
+      { label: "Choose Difficulty", action: () => this.returnToDifficultySelection() },
+      { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
+    ];
+    this.menuIndex = 0;
+    this.menuOpen = true;
+    this.pauseMenuGroup.setVisible(true);
+    if (this.modalBackdrop) this.modalBackdrop.setVisible(true);
+    this.refreshPauseMenu();
+  }
+
+  closePauseMenu() {
+    this.menuOpen = false;
+    this.pauseMenuGroup?.setVisible(false);
+    if (this.modalBackdrop && !this.helpGroup?.visible && !this.introGroup) {
+      this.modalBackdrop.setVisible(false);
+    }
+  }
+
+  refreshPauseMenu() {
+    this.pauseMenuItems.forEach((item, i) => {
+      const selected = i === this.menuIndex;
+      item
+        .setText(`${selected ? ">" : " "} ${this.menuOptions[i]?.label ?? ""}`)
+        .setColor(selected ? "#9ee3ff" : "#d4e8ff");
+    });
+  }
+
+  movePauseSelection(delta) {
+    if (!this.menuOpen) return;
+    this.menuIndex = Phaser.Math.Wrap(this.menuIndex + delta, 0, this.menuOptions.length);
+    this.refreshPauseMenu();
+  }
+
+  activatePauseSelection() {
+    if (!this.menuOpen) return;
+    this.menuOptions[this.menuIndex]?.action?.();
   }
 
   toggleHelpOverlay() {
@@ -761,7 +845,7 @@ class StakeInvadersScene extends Phaser.Scene {
 
   isPadShootPressed(pad) {
     if (!pad) return false;
-    return !!pad.buttons[0]?.pressed || !!pad.buttons[1]?.pressed;
+    return !!pad.buttons[0]?.pressed || !!pad.buttons[2]?.pressed;
   }
 
   consumeGamepadEdge(name, isDown) {
@@ -774,45 +858,80 @@ class StakeInvadersScene extends Phaser.Scene {
     const pad = this.getPrimaryGamepad();
     if (!pad) {
       this.gamepadStickHeld = false;
+      this.gamepadVerticalHeld = false;
+      this.startSelectHeld = false;
       return;
     }
 
     const primaryPressed =
       this.consumeGamepadEdge("primary0", !!pad.buttons[0]?.pressed) ||
-      this.consumeGamepadEdge("primary1", !!pad.buttons[1]?.pressed) ||
+      this.consumeGamepadEdge("primary2", !!pad.buttons[2]?.pressed) ||
       this.consumeGamepadEdge("start", !!pad.buttons[9]?.pressed);
     const helpPressed = this.consumeGamepadEdge("help", !!pad.buttons[3]?.pressed);
     const resetPressed = this.consumeGamepadEdge("reset", !!pad.buttons[8]?.pressed);
+    const backPressed = this.consumeGamepadEdge("back", !!pad.buttons[1]?.pressed);
+    const regularPressed = this.consumeGamepadEdge("regular", !!pad.buttons[4]?.pressed);
+    const liquidPressed = this.consumeGamepadEdge("liquid", !!pad.buttons[5]?.pressed);
 
     const left = this.isPadLeft(pad);
     const right = this.isPadRight(pad);
+    const up = (pad.axes[1] ?? 0) <= -GAMEPAD_DEADZONE || !!pad.buttons[12]?.pressed;
+    const down = (pad.axes[1] ?? 0) >= GAMEPAD_DEADZONE || !!pad.buttons[13]?.pressed;
     const axisActive = left || right;
+    const verticalActive = up || down;
     const leftPressed = left && !this.gamepadStickHeld;
     const rightPressed = right && !this.gamepadStickHeld;
+    const upPressed = up && !this.gamepadVerticalHeld;
+    const downPressed = down && !this.gamepadVerticalHeld;
     this.gamepadStickHeld = axisActive;
+    this.gamepadVerticalHeld = verticalActive;
+
+    const startSelectHeld = !!pad.buttons[8]?.pressed && !!pad.buttons[9]?.pressed;
+    const startSelectPressed = startSelectHeld && !this.startSelectHeld;
+    this.startSelectHeld = startSelectHeld;
+
+    if (startSelectPressed) {
+      window.location.href = HOME_URL;
+      return;
+    }
 
     if (helpPressed && this.gameStarted && !this.roundEnded) {
       this.toggleHelpOverlay();
     }
 
     if (this.helpGroup?.visible) {
-      if (helpPressed || primaryPressed || resetPressed) {
+      if (helpPressed || primaryPressed || resetPressed || backPressed) {
         this.toggleHelpOverlay();
       }
       return;
     }
 
+    if (this.menuOpen) {
+      if (upPressed) this.movePauseSelection(-1);
+      if (downPressed) this.movePauseSelection(1);
+      if (primaryPressed) this.activatePauseSelection();
+      if (backPressed || resetPressed) this.closePauseMenu();
+      return;
+    }
+
     if (this.roundEnded) {
-      if (primaryPressed || resetPressed) this.returnToDifficultySelection();
+      if (primaryPressed || resetPressed || backPressed) this.returnToDifficultySelection();
       return;
     }
 
     if (!this.gameStarted) {
       if (this.introStage < 4) {
+        if (backPressed && this.introStage > 1) this.showIntroStage(this.introStage - 1);
         if (primaryPressed) this.handlePrimaryAction();
         return;
       }
 
+      if (backPressed) {
+        this.showIntroStage(3);
+        return;
+      }
+      if (regularPressed) this.handleDifficultyChoice(MODE_DELEGATED);
+      if (liquidPressed) this.handleDifficultyChoice(MODE_STVAULTS);
       if (leftPressed) this.handleDifficultyChoice(MODE_DELEGATED);
       if (rightPressed) this.handleDifficultyChoice(MODE_STVAULTS);
       if (this.consumeGamepadEdge("delegated", !!pad.buttons[14]?.pressed)) {
@@ -824,6 +943,16 @@ class StakeInvadersScene extends Phaser.Scene {
       if (primaryPressed) {
         this.handleDifficultyChoice(left ? MODE_DELEGATED : MODE_STVAULTS);
       }
+      return;
+    }
+
+    if (this.consumeGamepadEdge("menuStart", !!pad.buttons[9]?.pressed) || resetPressed) {
+      this.openPauseMenu();
+      return;
+    }
+
+    if (backPressed) {
+      this.openPauseMenu();
     }
   }
 
@@ -1000,7 +1129,7 @@ class StakeInvadersScene extends Phaser.Scene {
       wordWrap: { width: 520 },
     }).setOrigin(0.5);
 
-    const restart = this.add.text(GAME_WIDTH / 2, 444, "Press SPACE to choose difficulty", {
+    const restart = this.add.text(GAME_WIDTH / 2, 444, "Press A, B, Start, or Select for menu options", {
       fontSize: "24px",
       color: "#ff9f9f",
     }).setOrigin(0.5);

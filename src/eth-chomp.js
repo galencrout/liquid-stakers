@@ -27,9 +27,9 @@ app.innerHTML = `
     </section>
 
     <section class="controls">
-      <p>Move: Arrows / WASD</p>
-      <p>Flow: Space to continue, 1/2 to choose difficulty</p>
-      <p>In round: 1/2 switch difficulty, R reselect difficulty, M mute</p>
+      <p>Move: Arcade stick</p>
+      <p>Flow: A or Start continues, L = Regular, R = Liquid, B = back</p>
+      <p>In round: Start or Select opens menu, Start+Select returns to chooser</p>
     </section>
   </main>
 `;
@@ -56,6 +56,7 @@ const QUEUE_MAX_MS = 25000;
 const QUEUE_MEAN_MS = 16500;
 const QUEUE_STD_MS = 3200;
 const GAMEPAD_DEADZONE = 0.45;
+const HOME_URL = "./index.html";
 const CHOMP_SCORE = 0.3;
 const GHOST_SCORE = 2;
 const START_LIVES = 3;
@@ -146,6 +147,10 @@ const state = {
   muted: false,
   gamepadButtons: {},
   gamepadAxis: { horizontal: 0, vertical: 0 },
+  startSelectHeld: false,
+  menuIndex: 0,
+  menuOptions: [],
+  previousPhase: null,
 };
 
 const audio = { ctx: null, master: null, timer: null, step: 0 };
@@ -193,7 +198,7 @@ function showIntroScreen() {
       "Regular Staking gates collection behind the entry queue.",
       "Liquid Staking (Lido) starts collecting immediately.",
     ],
-    "Press Space or Enter to continue",
+    "Press A or Start to continue",
     "neutral",
   );
   updateHUD();
@@ -205,10 +210,10 @@ function showDifficultyScreen() {
   showOverlay(
     "Select Difficulty",
     [
-      "1. Regular Staking - queue delay before chomping ETH.",
-      "2. Liquid Staking (Lido) - chomp from the outset.",
+      "L or move left: Regular Staking - queue delay before chomping ETH.",
+      "R or move right: Liquid Staking (Lido) - chomp from the outset.",
     ],
-    "Press 1 or 2 to start",
+    "Press L or R to start. Press B to go back.",
     "choice",
   );
   updateHUD();
@@ -224,7 +229,7 @@ function showEndScreen(kind) {
         `Final score: ${state.score.toFixed(1)}`,
         "Stake-Man cleared the maze.",
       ],
-      "Press Space/Enter or R to choose difficulty",
+      "Press A or B for difficulty. Start or Select opens menu.",
       "success",
     );
   } else {
@@ -234,11 +239,66 @@ function showEndScreen(kind) {
         `Final score: ${state.score.toFixed(1)}`,
         "Try a new run with better pathing.",
       ],
-      "Press Space/Enter or R to choose difficulty",
+      "Press A or B for difficulty. Start or Select opens menu.",
       "danger",
     );
   }
   updateHUD();
+}
+
+function openGameMenu() {
+  state.previousPhase = state.phase;
+  state.phase = "menu";
+  state.running = false;
+  state.menuOptions = state.previousPhase === "playing"
+    ? [
+        { label: "Resume", action: () => closeGameMenu() },
+        { label: "Restart Round", action: () => startRound(state.mode ?? "regular") },
+        { label: "Choose Difficulty", action: () => showDifficultyScreen() },
+        { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
+      ]
+    : [
+        { label: "Choose Difficulty", action: () => showDifficultyScreen() },
+        { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
+      ];
+  state.menuIndex = 0;
+  renderGameMenu();
+}
+
+function renderGameMenu() {
+  showOverlay(
+    "Game Menu",
+    state.menuOptions.map((option, index) => `${index === state.menuIndex ? ">" : " "} ${option.label}`),
+    "Stick: move   A/Start: choose   B: close",
+    "neutral",
+  );
+}
+
+function closeGameMenu() {
+  state.phase = state.previousPhase || "playing";
+  state.running = state.phase === "playing";
+  state.previousPhase = null;
+  if (state.phase === "playing") {
+    hideOverlay();
+    updateHUD();
+  } else if (state.phase === "win" || state.phase === "gameover") {
+    showEndScreen(state.phase);
+  } else if (state.phase === "select") {
+    showDifficultyScreen();
+  } else {
+    showIntroScreen();
+  }
+}
+
+function moveMenu(delta) {
+  if (state.phase !== "menu") return;
+  state.menuIndex = (state.menuIndex + delta + state.menuOptions.length) % state.menuOptions.length;
+  renderGameMenu();
+}
+
+function activateMenuChoice() {
+  if (state.phase !== "menu") return;
+  state.menuOptions[state.menuIndex]?.action?.();
 }
 
 function isWall(x, y) {
@@ -727,21 +787,19 @@ function pollGamepad() {
   if (!pad) {
     state.gamepadAxis.horizontal = 0;
     state.gamepadAxis.vertical = 0;
+    state.startSelectHeld = false;
     return;
   }
 
   const primaryPressed =
     consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
-    consumePadEdge("primary1", !!pad.buttons[1]?.pressed) ||
+    consumePadEdge("primary2", !!pad.buttons[2]?.pressed) ||
     consumePadEdge("start", !!pad.buttons[9]?.pressed);
   const resetPressed = consumePadEdge("reset", !!pad.buttons[8]?.pressed);
   const mutePressed = consumePadEdge("mute", !!pad.buttons[3]?.pressed);
-  const regularPressed =
-    consumePadEdge("regular", !!pad.buttons[4]?.pressed) ||
-    consumePadEdge("regularDpad", !!pad.buttons[14]?.pressed);
-  const liquidPressed =
-    consumePadEdge("liquid", !!pad.buttons[5]?.pressed) ||
-    consumePadEdge("liquidDpad", !!pad.buttons[15]?.pressed);
+  const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed);
+  const regularPressed = consumePadEdge("regular", !!pad.buttons[4]?.pressed);
+  const liquidPressed = consumePadEdge("liquid", !!pad.buttons[5]?.pressed);
 
   if (mutePressed) {
     state.muted = !state.muted;
@@ -765,8 +823,17 @@ function pollGamepad() {
   state.gamepadAxis.horizontal = horizontalState;
   state.gamepadAxis.vertical = verticalState;
 
+  const startSelectHeld = !!pad.buttons[8]?.pressed && !!pad.buttons[9]?.pressed;
+  const startSelectPressed = startSelectHeld && !state.startSelectHeld;
+  state.startSelectHeld = startSelectHeld;
+
+  if (startSelectPressed) {
+    window.location.href = HOME_URL;
+    return;
+  }
+
   if (state.phase === "intro") {
-    if (primaryPressed || regularPressed || liquidPressed) showDifficultyScreen();
+    if (primaryPressed) showDifficultyScreen();
     return;
   }
 
@@ -774,17 +841,32 @@ function pollGamepad() {
     if (regularPressed || (horizontalEdge && horizontalState < 0)) handleDifficultyChoice("regular");
     if (liquidPressed || (horizontalEdge && horizontalState > 0)) handleDifficultyChoice("liquid");
     if (primaryPressed) handleDifficultyChoice(horizontalState < 0 ? "regular" : "liquid");
+    if (backPressed) showIntroScreen();
+    return;
+  }
+
+  if (state.phase === "menu") {
+    if (verticalEdge) moveMenu(verticalState < 0 ? -1 : 1);
+    if (primaryPressed) activateMenuChoice();
+    if (backPressed || resetPressed) {
+      if (state.previousPhase === "win" || state.previousPhase === "gameover") {
+        showDifficultyScreen();
+      } else {
+        closeGameMenu();
+      }
+    }
     return;
   }
 
   if (state.phase === "win" || state.phase === "gameover") {
-    if (primaryPressed || resetPressed) showDifficultyScreen();
+    if (primaryPressed || backPressed) showDifficultyScreen();
+    if (resetPressed) openGameMenu();
     return;
   }
 
   if (regularPressed) handleDifficultyChoice("regular");
   if (liquidPressed) handleDifficultyChoice("liquid");
-  if (resetPressed) showDifficultyScreen();
+  if (resetPressed || consumePadEdge("menuStart", !!pad.buttons[9]?.pressed)) openGameMenu();
 
   if (horizontalEdge) state.nextDir = horizontalState < 0 ? "left" : "right";
   if (verticalEdge) state.nextDir = verticalState < 0 ? "up" : "down";
@@ -904,6 +986,15 @@ window.addEventListener("keydown", (e) => {
   if (state.phase === "select") {
     if (key === "1") handleDifficultyChoice("regular");
     if (key === "2") handleDifficultyChoice("liquid");
+    if (key === "escape" || key === "b") showIntroScreen();
+    return;
+  }
+
+  if (state.phase === "menu") {
+    if (key === "arrowup" || key === "w") moveMenu(-1);
+    if (key === "arrowdown" || key === "s") moveMenu(1);
+    if (key === " " || key === "enter") activateMenuChoice();
+    if (key === "escape" || key === "b") closeGameMenu();
     return;
   }
 
@@ -915,6 +1006,8 @@ window.addEventListener("keydown", (e) => {
   if (key === "1") handleDifficultyChoice("regular");
   if (key === "2") handleDifficultyChoice("liquid");
   if (key === "r") showDifficultyScreen();
+  if (key === "escape" || key === "tab") openGameMenu();
+  if (key === "h") window.location.href = HOME_URL;
 
   if (key === "arrowleft" || key === "a") state.nextDir = "left";
   if (key === "arrowright" || key === "d") state.nextDir = "right";

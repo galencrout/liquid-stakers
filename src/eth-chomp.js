@@ -55,6 +55,7 @@ const QUEUE_MIN_MS = 8000;
 const QUEUE_MAX_MS = 25000;
 const QUEUE_MEAN_MS = 16500;
 const QUEUE_STD_MS = 3200;
+const GAMEPAD_DEADZONE = 0.45;
 const CHOMP_SCORE = 0.3;
 const GHOST_SCORE = 2;
 const START_LIVES = 3;
@@ -143,6 +144,8 @@ const state = {
   lastStep: 0,
   lastGhostStep: 0,
   muted: false,
+  gamepadButtons: {},
+  gamepadAxis: { horizontal: 0, vertical: 0 },
 };
 
 const audio = { ctx: null, master: null, timer: null, step: 0 };
@@ -702,7 +705,94 @@ function startRound(mode) {
   resetBoard(true);
 }
 
+function getPrimaryGamepad() {
+  const pads = navigator.getGamepads?.() ?? [];
+  return pads.find((pad) => pad?.connected) ?? null;
+}
+
+function consumePadEdge(name, isDown) {
+  const wasDown = !!state.gamepadButtons[name];
+  state.gamepadButtons[name] = isDown;
+  return isDown && !wasDown;
+}
+
+function axisDirection(value, negative, positive) {
+  if (value <= -GAMEPAD_DEADZONE) return negative;
+  if (value >= GAMEPAD_DEADZONE) return positive;
+  return null;
+}
+
+function pollGamepad() {
+  const pad = getPrimaryGamepad();
+  if (!pad) {
+    state.gamepadAxis.horizontal = 0;
+    state.gamepadAxis.vertical = 0;
+    return;
+  }
+
+  const primaryPressed =
+    consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
+    consumePadEdge("primary1", !!pad.buttons[1]?.pressed) ||
+    consumePadEdge("start", !!pad.buttons[9]?.pressed);
+  const resetPressed = consumePadEdge("reset", !!pad.buttons[8]?.pressed);
+  const mutePressed = consumePadEdge("mute", !!pad.buttons[3]?.pressed);
+  const regularPressed =
+    consumePadEdge("regular", !!pad.buttons[4]?.pressed) ||
+    consumePadEdge("regularDpad", !!pad.buttons[14]?.pressed);
+  const liquidPressed =
+    consumePadEdge("liquid", !!pad.buttons[5]?.pressed) ||
+    consumePadEdge("liquidDpad", !!pad.buttons[15]?.pressed);
+
+  if (mutePressed) {
+    state.muted = !state.muted;
+    if (audio.master) audio.master.gain.value = state.muted ? 0 : 0.24;
+  }
+
+  const horizontalDir =
+    axisDirection(pad.axes[0] ?? 0, "left", "right") ||
+    (!!pad.buttons[14]?.pressed ? "left" : null) ||
+    (!!pad.buttons[15]?.pressed ? "right" : null);
+  const verticalDir =
+    axisDirection(pad.axes[1] ?? 0, "up", "down") ||
+    (!!pad.buttons[12]?.pressed ? "up" : null) ||
+    (!!pad.buttons[13]?.pressed ? "down" : null);
+
+  const horizontalState = horizontalDir ? (horizontalDir === "left" ? -1 : 1) : 0;
+  const verticalState = verticalDir ? (verticalDir === "up" ? -1 : 1) : 0;
+
+  const horizontalEdge = horizontalState !== 0 && horizontalState !== state.gamepadAxis.horizontal;
+  const verticalEdge = verticalState !== 0 && verticalState !== state.gamepadAxis.vertical;
+  state.gamepadAxis.horizontal = horizontalState;
+  state.gamepadAxis.vertical = verticalState;
+
+  if (state.phase === "intro") {
+    if (primaryPressed || regularPressed || liquidPressed) showDifficultyScreen();
+    return;
+  }
+
+  if (state.phase === "select") {
+    if (regularPressed || (horizontalEdge && horizontalState < 0)) handleDifficultyChoice("regular");
+    if (liquidPressed || (horizontalEdge && horizontalState > 0)) handleDifficultyChoice("liquid");
+    if (primaryPressed) handleDifficultyChoice(horizontalState < 0 ? "regular" : "liquid");
+    return;
+  }
+
+  if (state.phase === "win" || state.phase === "gameover") {
+    if (primaryPressed || resetPressed) showDifficultyScreen();
+    return;
+  }
+
+  if (regularPressed) handleDifficultyChoice("regular");
+  if (liquidPressed) handleDifficultyChoice("liquid");
+  if (resetPressed) showDifficultyScreen();
+
+  if (horizontalEdge) state.nextDir = horizontalState < 0 ? "left" : "right";
+  if (verticalEdge) state.nextDir = verticalState < 0 ? "up" : "down";
+}
+
 function gameLoop(now) {
+  pollGamepad();
+
   if (state.running && state.phase === "playing") {
     if (state.mode === "regular" && !state.canCollect && now >= state.queueEnd) {
       state.canCollect = true;

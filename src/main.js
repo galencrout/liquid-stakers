@@ -24,6 +24,7 @@ const ENEMY_FORMATION = [
   "11011110111",
   "01100110010",
 ];
+const GAMEPAD_DEADZONE = 0.45;
 
 const MODE_DELEGATED = "Delegated (Exit Queue Lag)";
 const MODE_STVAULTS = "stVaults (Instant Control)";
@@ -61,6 +62,8 @@ class StakeInvadersScene extends Phaser.Scene {
 
     this.inputQueue = [];
     this.playerState = { moveX: 0, shoot: false };
+    this.gamepadButtons = {};
+    this.gamepadStickHeld = false;
 
     this.score = 0;
     this.lastFireAt = -BULLET_COOLDOWN_MS;
@@ -733,11 +736,95 @@ class StakeInvadersScene extends Phaser.Scene {
   }
 
   captureRawInput() {
-    const left = this.cursors.left.isDown || this.keys.a.isDown;
-    const right = this.cursors.right.isDown || this.keys.d.isDown;
+    const pad = this.getPrimaryGamepad();
+    const left = this.cursors.left.isDown || this.keys.a.isDown || this.isPadLeft(pad);
+    const right = this.cursors.right.isDown || this.keys.d.isDown || this.isPadRight(pad);
     const moveX = (right ? 1 : 0) - (left ? 1 : 0);
-    const shoot = this.cursors.space.isDown || this.keys.space.isDown;
+    const shoot = this.cursors.space.isDown || this.keys.space.isDown || this.isPadShootPressed(pad);
     return { moveX, shoot };
+  }
+
+  getPrimaryGamepad() {
+    const pads = navigator.getGamepads?.() ?? [];
+    return pads.find((pad) => pad?.connected) ?? null;
+  }
+
+  isPadLeft(pad) {
+    if (!pad) return false;
+    return (pad.axes[0] ?? 0) <= -GAMEPAD_DEADZONE || !!pad.buttons[14]?.pressed;
+  }
+
+  isPadRight(pad) {
+    if (!pad) return false;
+    return (pad.axes[0] ?? 0) >= GAMEPAD_DEADZONE || !!pad.buttons[15]?.pressed;
+  }
+
+  isPadShootPressed(pad) {
+    if (!pad) return false;
+    return !!pad.buttons[0]?.pressed || !!pad.buttons[1]?.pressed;
+  }
+
+  consumeGamepadEdge(name, isDown) {
+    const wasDown = !!this.gamepadButtons[name];
+    this.gamepadButtons[name] = isDown;
+    return isDown && !wasDown;
+  }
+
+  pollGamepadUi() {
+    const pad = this.getPrimaryGamepad();
+    if (!pad) {
+      this.gamepadStickHeld = false;
+      return;
+    }
+
+    const primaryPressed =
+      this.consumeGamepadEdge("primary0", !!pad.buttons[0]?.pressed) ||
+      this.consumeGamepadEdge("primary1", !!pad.buttons[1]?.pressed) ||
+      this.consumeGamepadEdge("start", !!pad.buttons[9]?.pressed);
+    const helpPressed = this.consumeGamepadEdge("help", !!pad.buttons[3]?.pressed);
+    const resetPressed = this.consumeGamepadEdge("reset", !!pad.buttons[8]?.pressed);
+
+    const left = this.isPadLeft(pad);
+    const right = this.isPadRight(pad);
+    const axisActive = left || right;
+    const leftPressed = left && !this.gamepadStickHeld;
+    const rightPressed = right && !this.gamepadStickHeld;
+    this.gamepadStickHeld = axisActive;
+
+    if (helpPressed && this.gameStarted && !this.roundEnded) {
+      this.toggleHelpOverlay();
+    }
+
+    if (this.helpGroup?.visible) {
+      if (helpPressed || primaryPressed || resetPressed) {
+        this.toggleHelpOverlay();
+      }
+      return;
+    }
+
+    if (this.roundEnded) {
+      if (primaryPressed || resetPressed) this.returnToDifficultySelection();
+      return;
+    }
+
+    if (!this.gameStarted) {
+      if (this.introStage < 4) {
+        if (primaryPressed) this.handlePrimaryAction();
+        return;
+      }
+
+      if (leftPressed) this.handleDifficultyChoice(MODE_DELEGATED);
+      if (rightPressed) this.handleDifficultyChoice(MODE_STVAULTS);
+      if (this.consumeGamepadEdge("delegated", !!pad.buttons[14]?.pressed)) {
+        this.handleDifficultyChoice(MODE_DELEGATED);
+      }
+      if (this.consumeGamepadEdge("stvaults", !!pad.buttons[15]?.pressed)) {
+        this.handleDifficultyChoice(MODE_STVAULTS);
+      }
+      if (primaryPressed) {
+        this.handleDifficultyChoice(left ? MODE_DELEGATED : MODE_STVAULTS);
+      }
+    }
   }
 
   enqueueInput(now) {
@@ -939,6 +1026,8 @@ class StakeInvadersScene extends Phaser.Scene {
   update(_, delta) {
     const now = this.time.now;
     const deltaSec = delta / 1000;
+
+    this.pollGamepadUi();
 
     if (this.roundEnded) {
       this.updateHUD();

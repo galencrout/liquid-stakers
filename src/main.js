@@ -1190,7 +1190,7 @@ class StakeInvadersScene extends Phaser.Scene {
 }
 
 const config = {
-  type: Phaser.AUTO,
+  type: Phaser.CANVAS,
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   parent: "app",

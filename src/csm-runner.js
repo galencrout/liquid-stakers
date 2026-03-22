@@ -5,6 +5,7 @@ const HEIGHT = 720;
 const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 const SLOT_BASE = 14_001_034;
 const FORK_INTERVAL = 40;
+const GAMEPAD_DEADZONE = 0.45;
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const PROPOSAL_ART = [
   "██████  ██       ██████   ██████ ██   ██",
@@ -175,6 +176,8 @@ const game = {
   screen: "title",
   activeMode: "vanilla",
   lastTime: 0,
+  gamepadButtons: {},
+  gamepadAxis: { horizontal: 0, vertical: 0 },
   phaseIndex: 0,
   slotsCleared: 0,
   nextProposalAt: 12,
@@ -201,6 +204,11 @@ const leaderboardState = {
   score: 0,
   letters: ["A", "A", "A", "A", "A"],
   index: 0,
+};
+
+const overlayState = {
+  view: "title",
+  selectedIndex: 0,
 };
 
 showTitle();
@@ -292,6 +300,114 @@ overlay.addEventListener("pointerdown", (event) => {
 
   startSelectedMode(game.activeMode);
 });
+
+function getPrimaryGamepad() {
+  const pads = navigator.getGamepads?.() ?? [];
+  return pads.find((pad) => pad?.connected) ?? null;
+}
+
+function consumePadEdge(name, isDown) {
+  const wasDown = !!game.gamepadButtons[name];
+  game.gamepadButtons[name] = isDown;
+  return isDown && !wasDown;
+}
+
+function axisDirection(value, negative, positive) {
+  if (value <= -GAMEPAD_DEADZONE) return negative;
+  if (value >= GAMEPAD_DEADZONE) return positive;
+  return null;
+}
+
+function pollGamepad() {
+  const pad = getPrimaryGamepad();
+  if (!pad) {
+    game.gamepadAxis.horizontal = 0;
+    game.gamepadAxis.vertical = 0;
+    return;
+  }
+
+  const primaryPressed =
+    consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
+    consumePadEdge("primary2", !!pad.buttons[2]?.pressed) ||
+    consumePadEdge("start", !!pad.buttons[9]?.pressed);
+  const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed);
+  const leftPressed = consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
+  const rightPressed = consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
+
+  const horizontalDir =
+    axisDirection(pad.axes[0] ?? 0, "left", "right") ||
+    (!!pad.buttons[14]?.pressed ? "left" : null) ||
+    (!!pad.buttons[15]?.pressed ? "right" : null);
+  const verticalDir =
+    axisDirection(pad.axes[1] ?? 0, "up", "down") ||
+    (!!pad.buttons[12]?.pressed ? "up" : null) ||
+    (!!pad.buttons[13]?.pressed ? "down" : null);
+
+  const horizontalState = horizontalDir ? (horizontalDir === "left" ? -1 : 1) : 0;
+  const verticalState = verticalDir ? (verticalDir === "up" ? -1 : 1) : 0;
+  const horizontalEdge = horizontalState !== 0 && horizontalState !== game.gamepadAxis.horizontal;
+  const verticalEdge = verticalState !== 0 && verticalState !== game.gamepadAxis.vertical;
+  game.gamepadAxis.horizontal = horizontalState;
+  game.gamepadAxis.vertical = verticalState;
+
+  if (game.screen === "playing") {
+    if (primaryPressed) {
+      primaryAction();
+    }
+    return;
+  }
+
+  if (game.pendingLeaderboardEntry) {
+    if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState);
+    if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
+    if (primaryPressed) saveLeaderboardInitials();
+    if (backPressed) {
+      game.pendingLeaderboardEntry = false;
+      showGameOver();
+    }
+    return;
+  }
+
+  if (overlayState.view === "title") {
+    if (horizontalEdge || leftPressed || rightPressed) {
+      const direction = leftPressed ? -1 : rightPressed ? 1 : horizontalState;
+      overlayState.selectedIndex = (overlayState.selectedIndex + direction + 2) % 2;
+      showTitle();
+    }
+    if (primaryPressed) {
+      startSelectedMode(overlayState.selectedIndex === 0 ? "vanilla" : "csm");
+    }
+    if (backPressed) {
+      overlayState.selectedIndex = 0;
+      showTitle();
+    }
+    return;
+  }
+
+  if (overlayState.view === "gameover") {
+    if (horizontalEdge || leftPressed || rightPressed) {
+      const direction = leftPressed ? -1 : rightPressed ? 1 : horizontalState;
+      overlayState.selectedIndex = (overlayState.selectedIndex + direction + 2) % 2;
+      showGameOver();
+    }
+    if (primaryPressed) {
+      if (overlayState.selectedIndex === 0) {
+        startSelectedMode(game.activeMode);
+      } else {
+        game.screen = "title";
+        game.pendingLeaderboardEntry = false;
+        showTitle();
+        updateHud();
+      }
+    }
+    if (backPressed) {
+      game.screen = "title";
+      game.pendingLeaderboardEntry = false;
+      showTitle();
+      updateHud();
+    }
+  }
+}
 
 function createAudio() {
   let context = null;
@@ -424,6 +540,7 @@ function startSelectedMode(mode) {
   leaderboardState.score = 0;
   leaderboardState.letters = ["A", "A", "A", "A", "A"];
   leaderboardState.index = 0;
+  overlayState.view = "playing";
   game.particles = [];
 
   if (mode === "vanilla") {
@@ -479,11 +596,12 @@ function primaryAction() {
 }
 
 function showTitle() {
+  overlayState.view = "title";
   showOverlay();
   overlayCard.innerHTML = `
     <h1 class="overlay-title">Choose Mode</h1>
     <div class="mode-grid">
-      <button class="mode-card" type="button" data-overlay-action="start" data-mode="vanilla">
+      <button class="mode-card ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="vanilla">
         <span class="mode-card-title">Vanilla Staking</span>
         <span class="mode-card-metric">Bond: 32 ETH</span>
         <span class="mode-card-metric">APR: 2.75%</span>
@@ -491,7 +609,7 @@ function showTitle() {
         <span class="mode-card-subtitle">Leaderboard</span>
         ${renderLeaderboard("vanilla")}
       </button>
-      <button class="mode-card" type="button" data-overlay-action="start" data-mode="csm">
+      <button class="mode-card ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="csm">
         <span class="mode-card-title">CSM ICS Mode</span>
         <span class="mode-card-metric">Bond: 1.5 ETH</span>
         <span class="mode-card-metric">APR: 5.87%</span>
@@ -506,26 +624,30 @@ function showTitle() {
 function showGameOver() {
   showOverlay();
   if (game.pendingLeaderboardEntry) {
+    overlayState.view = "entry";
+    overlayState.selectedIndex = 0;
     overlayCard.innerHTML = `
       <div class="overlay-kicker">${getModeConfig().label}</div>
       <h2 class="overlay-title">New High Score</h2>
       <p class="overlay-copy overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
       <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-      <div class="entry-hint">Left/right selects slot. Up/down changes letter. Enter saves.</div>
-      <button class="overlay-button" type="button" data-overlay-action="save-score">Save Score</button>
+      <div class="entry-hint">Stick left/right selects slot. Up/down changes letter. A or Start saves.</div>
+      <button class="overlay-button is-selected" type="button" data-overlay-action="save-score">Save Score</button>
       <button class="overlay-button overlay-button--ghost" type="button" data-overlay-action="skip-score">Skip</button>
     `;
     return;
   }
 
+  overlayState.view = "gameover";
+  overlayState.selectedIndex = Math.min(overlayState.selectedIndex, 1);
   overlayCard.innerHTML = `
     <div class="overlay-kicker">${getModeConfig().label}</div>
     <h2 class="overlay-title">Restart</h2>
     <div class="overlay-scoreline">Slot ${formatSlot(SLOT_BASE + game.slotsCleared)}</div>
     ${renderLeaderboard(game.activeMode)}
     <div class="overlay-actions-row">
-      <button class="overlay-button" type="button" data-overlay-action="restart">Start Again</button>
-      <button class="overlay-button overlay-button--ghost" type="button" data-overlay-action="mode-select">Mode Select</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Mode Select</button>
     </div>
   `;
 }
@@ -598,6 +720,7 @@ function frame(timestamp) {
   const last = game.lastTime || timestamp;
   const delta = Math.min(0.032, (timestamp - last) / 1000);
   game.lastTime = timestamp;
+  pollGamepad();
 
   if (game.screen === "playing") {
     update(delta);

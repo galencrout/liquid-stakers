@@ -1,0 +1,32 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="675" fill="#091119"/>
+  <rect x="46" y="46" width="1108" height="583" rx="28" fill="url(#bg)"/>
+  <rect x="92" y="92" width="1016" height="64" rx="14" fill="#091119" stroke="#5A7796"/>
+  <text x="124" y="132" fill="#C5D9ED" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28" letter-spacing="2">BOND: 1.5 ETH</text>
+  <text x="452" y="132" fill="#C5D9ED" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28" letter-spacing="2">APR: 5.87%</text>
+  <text x="707" y="132" fill="#C5D9ED" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28" letter-spacing="2">MODE: ICS</text>
+  <text x="941" y="132" fill="#A7F3D0" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28" letter-spacing="2">STATUS: ACTIVE</text>
+  <line x1="120" y1="518" x2="1075" y2="518" stroke="#E6EEF5" stroke-width="4"/>
+  <line x1="120" y1="480" x2="1075" y2="480" stroke="#203243" stroke-width="2" stroke-dasharray="7 14"/>
+  <rect x="410" y="396" width="126" height="122" rx="16" fill="#111C26"/>
+  <rect x="410" y="374" width="126" height="40" rx="12" fill="#F6F9FC"/>
+  <rect x="426" y="431" width="20" height="12" rx="4" fill="#6FD6A5"/>
+  <rect x="448" y="430" width="24" height="14" rx="4" fill="#293743"/>
+  <rect x="486" y="430" width="28" height="14" rx="4" fill="#293743"/>
+  <rect x="524" y="430" width="12" height="14" rx="4" fill="#293743"/>
+  <rect x="890" y="436" width="120" height="34" rx="10" fill="#D9E4F0" fill-opacity="0.2" stroke="#8FA5B9"/>
+  <text x="907" y="460" fill="#EAF3FA" font-family="IBM Plex Mono, monospace" font-size="18" letter-spacing="1.5">BLOCK PROPOSAL</text>
+  <rect x="648" y="482" width="38" height="36" rx="8" fill="#B9C4D0"/>
+  <rect x="693" y="470" width="30" height="48" rx="8" fill="#D7E0E8"/>
+  <rect x="729" y="486" width="46" height="32" rx="8" fill="#A8B6C4"/>
+  <text x="121" y="231" fill="#F5FAFF" font-family="IBM Plex Sans, Arial, sans-serif" font-size="72" font-weight="700">Bond 1.5 ETH</text>
+  <text x="123" y="286" fill="#C5D9ED" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28" letter-spacing="2">BECOME AN IDENTIFIED COMMUNITY STAKER</text>
+  <text x="123" y="325" fill="#92A7BC" font-family="IBM Plex Mono, monospace" font-size="24" letter-spacing="2">OPERATIONAL BURDEN: ONGOING</text>
+  <text x="123" y="584" fill="#AABFD4" font-family="IBM Plex Sans, Arial, sans-serif" font-size="24" letter-spacing="2">Chrome dino energy for low-grade validator stress.</text>
+  <defs>
+    <linearGradient id="bg" x1="74" y1="56" x2="1110" y2="618" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#112233"/>
+      <stop offset="1" stop-color="#0A1117"/>
+    </linearGradient>
+  </defs>
+</svg>

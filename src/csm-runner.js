@@ -2,11 +2,17 @@ import "./csm-runner.css";
 
 const WIDTH = 1280;
 const HEIGHT = 720;
-const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+const LOW_PERF_DEVICE =
+  /Raspberry Pi/i.test(navigator.userAgent) ||
+  ((navigator.deviceMemory || 8) <= 4 && (navigator.hardwareConcurrency || 8) <= 4);
+const RENDER_SCALE = LOW_PERF_DEVICE ? 0.65 : 1;
+const DPR = Math.max(1, Math.min(LOW_PERF_DEVICE ? 1 : 2, window.devicePixelRatio || 1));
 const SLOT_BASE = 14_001_034;
 const FORK_INTERVAL = 40;
 const GAMEPAD_DEADZONE = 0.45;
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EFFECTS_ENABLED = !LOW_PERF_DEVICE && !REDUCED_MOTION;
+const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
 const PROPOSAL_ART = [
   "██████  ██       ██████   ██████ ██   ██",
   "██   ██ ██      ██    ██ ██      ██  ██ ",
@@ -149,10 +155,14 @@ app.innerHTML = `
 `;
 
 const canvas = document.querySelector(".runner-canvas");
-const ctx = canvas.getContext("2d");
-canvas.width = WIDTH * DPR;
-canvas.height = HEIGHT * DPR;
-ctx.scale(DPR, DPR);
+const ctx =
+  canvas.getContext("2d", { alpha: false, desynchronized: true }) ||
+  canvas.getContext("2d");
+canvas.width = Math.round(WIDTH * DPR * RENDER_SCALE);
+canvas.height = Math.round(HEIGHT * DPR * RENDER_SCALE);
+canvas.style.width = `${WIDTH}px`;
+canvas.style.height = `${HEIGHT}px`;
+ctx.setTransform(DPR * RENDER_SCALE, 0, 0, DPR * RENDER_SCALE, 0, 0);
 
 const overlay = document.querySelector("[data-overlay]");
 const overlayCard = document.querySelector("[data-overlay-card]");
@@ -186,6 +196,7 @@ const game = {
   proposalFlash: 0,
   hardforkFlash: 0,
   hardforkText: "",
+  hardforkTextCanvas: null,
   flappy: {
     speed: FLAPPY.startSpeed,
     columns: [],
@@ -197,7 +208,10 @@ const game = {
     player: { x: RUNNER.playerX, y: RUNNER.groundY, vy: 0, tilt: 0, onGround: true },
   },
   particles: [],
+  hudState: { mode: "", bond: "", apr: "", fork: "", slot: "", highScore: "" },
 };
+
+const renderCache = createRenderCache();
 
 const leaderboardState = {
   mode: null,
@@ -330,7 +344,7 @@ function pollGamepad() {
     consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
     consumePadEdge("primary2", !!pad.buttons[2]?.pressed) ||
     consumePadEdge("start", !!pad.buttons[9]?.pressed);
-  const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed);
+  const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed) || consumePadEdge("select", !!pad.buttons[8]?.pressed);
   const leftPressed = consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
   const rightPressed = consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
 
@@ -369,9 +383,14 @@ function pollGamepad() {
   }
 
   if (overlayState.view === "title") {
-    if (horizontalEdge || leftPressed || rightPressed) {
-      const direction = leftPressed ? -1 : rightPressed ? 1 : horizontalState;
-      overlayState.selectedIndex = (overlayState.selectedIndex + direction + 2) % 2;
+    if (leftPressed) {
+      overlayState.selectedIndex = 0;
+      showTitle();
+    } else if (rightPressed) {
+      overlayState.selectedIndex = 1;
+      showTitle();
+    } else if (horizontalEdge) {
+      overlayState.selectedIndex = (overlayState.selectedIndex + horizontalState + 2) % 2;
       showTitle();
     }
     if (primaryPressed) {
@@ -385,9 +404,14 @@ function pollGamepad() {
   }
 
   if (overlayState.view === "gameover") {
-    if (horizontalEdge || leftPressed || rightPressed) {
-      const direction = leftPressed ? -1 : rightPressed ? 1 : horizontalState;
-      overlayState.selectedIndex = (overlayState.selectedIndex + direction + 2) % 2;
+    if (leftPressed) {
+      overlayState.selectedIndex = 0;
+      showGameOver();
+    } else if (rightPressed) {
+      overlayState.selectedIndex = 1;
+      showGameOver();
+    } else if (horizontalEdge) {
+      overlayState.selectedIndex = (overlayState.selectedIndex + horizontalState + 2) % 2;
       showGameOver();
     }
     if (primaryPressed) {
@@ -466,7 +490,7 @@ function createStorage() {
 }
 
 function formatSlot(value) {
-  return new Intl.NumberFormat("en-US").format(value);
+  return NUMBER_FORMATTER.format(value);
 }
 
 function getModeConfig() {
@@ -536,6 +560,9 @@ function startSelectedMode(mode) {
   game.bestBeforeRun = getHighScore(mode);
   game.pendingLeaderboardEntry = false;
   game.proposalFlash = 0;
+  game.hardforkFlash = 0;
+  game.hardforkText = "";
+  game.hardforkTextCanvas = null;
   leaderboardState.mode = null;
   leaderboardState.score = 0;
   leaderboardState.letters = ["A", "A", "A", "A", "A"];
@@ -552,7 +579,7 @@ function startSelectedMode(mode) {
   hideOverlay();
   showPhase(PHASES[0]);
   audio.start();
-  updateHud();
+  updateHud(true);
 }
 
 function resetFlappy() {
@@ -618,6 +645,7 @@ function showTitle() {
         ${renderLeaderboard("csm")}
       </button>
     </div>
+    <div class="overlay-menu-hint">Stick or D-pad chooses. L selects Vanilla. R selects CSM. A or Start confirms.</div>
   `;
 }
 
@@ -631,9 +659,7 @@ function showGameOver() {
       <h2 class="overlay-title">New High Score</h2>
       <p class="overlay-copy overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
       <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-      <div class="entry-hint">Stick left/right selects slot. Up/down changes letter. A or Start saves.</div>
-      <button class="overlay-button is-selected" type="button" data-overlay-action="save-score">Save Score</button>
-      <button class="overlay-button overlay-button--ghost" type="button" data-overlay-action="skip-score">Skip</button>
+      <div class="entry-hint">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
     `;
     return;
   }
@@ -649,6 +675,7 @@ function showGameOver() {
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
       <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Mode Select</button>
     </div>
+    <div class="overlay-menu-hint">Stick or D-pad chooses. A or Start confirms. B returns to mode select.</div>
   `;
 }
 
@@ -707,13 +734,22 @@ function showOverlay() {
 
 function updateHud() {
   const mode = getModeConfig();
-  hud.mode.textContent = mode.label;
-  hud.bond.textContent = mode.bond;
-  hud.apr.textContent = mode.apr;
-  hud.fork.textContent = PHASES[game.phaseIndex].short;
-  hud.slot.textContent = formatSlot(SLOT_BASE + game.slotsCleared);
-  hud.highScore.textContent = formatSlot(SLOT_BASE + getHighScore());
-  hintEl.textContent = mode.hint;
+  const nextState = {
+    mode: mode.label,
+    bond: mode.bond,
+    apr: mode.apr,
+    fork: PHASES[game.phaseIndex].short,
+    slot: formatSlot(SLOT_BASE + game.slotsCleared),
+    highScore: formatSlot(SLOT_BASE + getHighScore()),
+  };
+  if (game.hudState.mode !== nextState.mode) hud.mode.textContent = nextState.mode;
+  if (game.hudState.bond !== nextState.bond) hud.bond.textContent = nextState.bond;
+  if (game.hudState.apr !== nextState.apr) hud.apr.textContent = nextState.apr;
+  if (game.hudState.fork !== nextState.fork) hud.fork.textContent = nextState.fork;
+  if (game.hudState.slot !== nextState.slot) hud.slot.textContent = nextState.slot;
+  if (game.hudState.highScore !== nextState.highScore) hud.highScore.textContent = nextState.highScore;
+  if (hintEl.textContent !== mode.hint) hintEl.textContent = mode.hint;
+  game.hudState = nextState;
 }
 
 function frame(timestamp) {
@@ -742,7 +778,9 @@ function update(delta) {
     showPhase(PHASES[game.phaseIndex]);
     game.hardforkFlash = HARDFORK_FLASH_DURATION;
     game.hardforkText = `${PHASES[game.phaseIndex].short.toUpperCase()} HARDFORK!`;
+    game.hardforkTextCanvas = getHardforkTextCanvas(game.hardforkText);
     audio.phase();
+    updateHud();
   }
 
   if (game.activeMode === "vanilla") {
@@ -753,7 +791,6 @@ function update(delta) {
   game.proposalFlash = Math.max(0, game.proposalFlash - delta);
   game.hardforkFlash = Math.max(0, game.hardforkFlash - delta);
   updateParticles(delta);
-  updateHud();
 }
 
 function updateFlappy(delta) {
@@ -794,8 +831,10 @@ function updateFlappy(delta) {
     }
   }
 
-  game.flappy.columns = game.flappy.columns.filter((column) => column.x + FLAPPY.pipeWidth > -120);
-  const lastColumn = game.flappy.columns.at(-1);
+  while (game.flappy.columns.length && game.flappy.columns[0].x + FLAPPY.pipeWidth <= -120) {
+    game.flappy.columns.shift();
+  }
+  const lastColumn = game.flappy.columns[game.flappy.columns.length - 1];
   if (!lastColumn || lastColumn.x < FLAPPY.spawnX - FLAPPY.pipeSpacing) {
     spawnFlappyColumn();
   }
@@ -834,8 +873,10 @@ function updateRunner(delta) {
     }
   }
 
-  game.runner.obstacles = game.runner.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -120);
-  const lastObstacle = game.runner.obstacles.at(-1);
+  while (game.runner.obstacles.length && game.runner.obstacles[0].x + game.runner.obstacles[0].width <= -120) {
+    game.runner.obstacles.shift();
+  }
+  const lastObstacle = game.runner.obstacles[game.runner.obstacles.length - 1];
   if (!lastObstacle || lastObstacle.x < RUNNER.spawnX - RUNNER.obstacleSpacing) {
     spawnRunnerObstacle();
   }
@@ -855,15 +896,22 @@ function onSlotCleared(proposal) {
       leaderboardState.score = game.slotsCleared;
     }
   }
+  updateHud();
 }
 
 function updateParticles(delta) {
-  game.particles = game.particles.filter((particle) => {
+  let writeIndex = 0;
+  for (let index = 0; index < game.particles.length; index += 1) {
+    const particle = game.particles[index];
     particle.x += particle.vx * delta;
     particle.y += particle.vy * delta;
     particle.life -= delta;
-    return particle.life > 0;
-  });
+    if (particle.life > 0) {
+      game.particles[writeIndex] = particle;
+      writeIndex += 1;
+    }
+  }
+  game.particles.length = writeIndex;
 }
 
 function spawnFlappyColumn(offset = 0) {
@@ -936,13 +984,8 @@ function rectsOverlap(a, b) {
 
 function render() {
   const phase = PHASES[game.phaseIndex];
-  ctx.clearRect(0, 0, WIDTH, HEIGHT);
-
-  const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-  sky.addColorStop(0, phase.sky[0]);
-  sky.addColorStop(1, phase.sky[1]);
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const backgroundKey = `${game.activeMode}-${game.phaseIndex}`;
+  ctx.drawImage(renderCache.backgrounds[backgroundKey], 0, 0, WIDTH, HEIGHT);
 
   drawProposalArt();
   drawHardforkArt();
@@ -959,7 +1002,7 @@ function render() {
 }
 
 function drawProposalArt() {
-  if (game.proposalFlash <= 0) {
+  if (game.proposalFlash <= 0 || !EFFECTS_ENABLED) {
     return;
   }
 
@@ -970,28 +1013,12 @@ function drawProposalArt() {
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = "bold 28px IBM Plex Mono, monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-
-  PROPOSAL_ART.forEach((line, index) => {
-    if (!line) {
-      return;
-    }
-    const y = baseY + index * 32;
-    const x = baseX + index * 7;
-    const lineAlpha = Math.max(0.18, alpha - index * 0.015);
-    ctx.fillStyle = `rgba(255, 255, 255, ${lineAlpha})`;
-    ctx.fillText(line, x, y);
-    ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0.05, lineAlpha * 0.38)})`;
-    ctx.fillText(line, x + 6, y + 6);
-  });
-
+  ctx.drawImage(renderCache.proposalArt, baseX, baseY);
   ctx.restore();
 }
 
 function drawHardforkArt() {
-  if (game.hardforkFlash <= 0 || !game.hardforkText) {
+  if (game.hardforkFlash <= 0 || !game.hardforkTextCanvas || !EFFECTS_ENABLED) {
     return;
   }
 
@@ -1002,13 +1029,7 @@ function drawHardforkArt() {
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = "bold 62px IBM Plex Mono, monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-  ctx.fillText(game.hardforkText, x, y);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.fillText(game.hardforkText, x + 10, y + 10);
+  ctx.drawImage(game.hardforkTextCanvas, x, y);
   ctx.restore();
 }
 
@@ -1128,13 +1149,15 @@ function drawRunnerPlayer(phase) {
 }
 
 function drawParticles() {
+  if (!EFFECTS_ENABLED) {
+    return;
+  }
   for (const particle of game.particles) {
-    ctx.save();
     ctx.globalAlpha = Math.max(0, particle.life * 2);
     ctx.fillStyle = particle.color;
     ctx.fillRect(particle.x, particle.y, 4, 4);
-    ctx.restore();
   }
+  ctx.globalAlpha = 1;
 }
 
 function roundRect(context, x, y, width, height, radius) {
@@ -1145,4 +1168,108 @@ function roundRect(context, x, y, width, height, radius) {
   context.arcTo(x, y + height, x, y, radius);
   context.arcTo(x, y, x + width, y, radius);
   context.closePath();
+}
+
+function createRenderCache() {
+  const backgrounds = {};
+  for (let phaseIndex = 0; phaseIndex < PHASES.length; phaseIndex += 1) {
+    const phase = PHASES[phaseIndex];
+    backgrounds[`vanilla-${phaseIndex}`] = buildBackgroundCanvas(phase, "vanilla");
+    backgrounds[`csm-${phaseIndex}`] = buildBackgroundCanvas(phase, "csm");
+  }
+  return {
+    backgrounds,
+    proposalArt: buildProposalArtCanvas(),
+    hardforkTexts: Object.create(null),
+  };
+}
+
+function buildBackgroundCanvas(phase, mode) {
+  const background = document.createElement("canvas");
+  background.width = WIDTH;
+  background.height = HEIGHT;
+  const backgroundCtx = background.getContext("2d", { alpha: false }) || background.getContext("2d");
+
+  const sky = backgroundCtx.createLinearGradient(0, 0, 0, HEIGHT);
+  sky.addColorStop(0, phase.sky[0]);
+  sky.addColorStop(1, phase.sky[1]);
+  backgroundCtx.fillStyle = sky;
+  backgroundCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  backgroundCtx.strokeStyle = phase.line;
+  backgroundCtx.lineWidth = 2;
+  if (mode === "vanilla") {
+    for (let index = 0; index < 5; index += 1) {
+      const y = 126 + index * 92;
+      backgroundCtx.beginPath();
+      backgroundCtx.moveTo(0, y);
+      backgroundCtx.lineTo(WIDTH, y);
+      backgroundCtx.stroke();
+    }
+    backgroundCtx.strokeStyle = phase.floor;
+    backgroundCtx.lineWidth = 4;
+    backgroundCtx.beginPath();
+    backgroundCtx.moveTo(0, HEIGHT - 56);
+    backgroundCtx.lineTo(WIDTH, HEIGHT - 56);
+    backgroundCtx.stroke();
+  } else {
+    for (let index = 0; index < 4; index += 1) {
+      const y = 180 + index * 88;
+      backgroundCtx.beginPath();
+      backgroundCtx.moveTo(0, y);
+      backgroundCtx.lineTo(WIDTH, y);
+      backgroundCtx.stroke();
+    }
+    backgroundCtx.strokeStyle = phase.floor;
+    backgroundCtx.lineWidth = 4;
+    backgroundCtx.beginPath();
+    backgroundCtx.moveTo(0, RUNNER.groundY + 4);
+    backgroundCtx.lineTo(WIDTH, RUNNER.groundY + 4);
+    backgroundCtx.stroke();
+  }
+
+  return background;
+}
+
+function buildProposalArtCanvas() {
+  const art = document.createElement("canvas");
+  art.width = 1120;
+  art.height = 420;
+  const artCtx = art.getContext("2d", { alpha: true }) || art.getContext("2d");
+
+  artCtx.font = "bold 28px IBM Plex Mono, monospace";
+  artCtx.textAlign = "left";
+  artCtx.textBaseline = "top";
+
+  PROPOSAL_ART.forEach((line, index) => {
+    if (!line) return;
+    const y = index * 32;
+    const x = index * 7;
+    const lineAlpha = Math.max(0.18, 0.4 - index * 0.015);
+    artCtx.fillStyle = `rgba(255, 255, 255, ${lineAlpha})`;
+    artCtx.fillText(line, x, y);
+    artCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0.05, lineAlpha * 0.38)})`;
+    artCtx.fillText(line, x + 6, y + 6);
+  });
+
+  return art;
+}
+
+function getHardforkTextCanvas(text) {
+  if (!renderCache.hardforkTexts[text]) {
+    const hardforkCanvas = document.createElement("canvas");
+    hardforkCanvas.width = 1100;
+    hardforkCanvas.height = 140;
+    const hardforkCtx =
+      hardforkCanvas.getContext("2d", { alpha: true }) || hardforkCanvas.getContext("2d");
+    hardforkCtx.font = "bold 62px IBM Plex Mono, monospace";
+    hardforkCtx.textAlign = "left";
+    hardforkCtx.textBaseline = "top";
+    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    hardforkCtx.fillText(text, 0, 0);
+    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.22)";
+    hardforkCtx.fillText(text, 10, 10);
+    renderCache.hardforkTexts[text] = hardforkCanvas;
+  }
+  return renderCache.hardforkTexts[text];
 }

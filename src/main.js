@@ -1,1201 +1,1164 @@
-import Phaser from "phaser";
 import "./style.css";
 
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 600;
+const LOW_PERF_DEVICE =
+  /Raspberry Pi/i.test(navigator.userAgent) ||
+  ((navigator.deviceMemory || 8) <= 4 && (navigator.hardwareConcurrency || 8) <= 4);
+const DPR = Math.max(1, Math.min(LOW_PERF_DEVICE ? 1 : 2, window.devicePixelRatio || 1));
+const RENDER_SCALE = LOW_PERF_DEVICE ? 0.6 : 1;
 const ROUND_LENGTH_MS = 60_000;
-const PLAYER_Y = 560;
 const PLAYER_SPEED = 320;
-const BULLET_SPEED = -520;
+const BULLET_SPEED = 520;
 const BULLET_COOLDOWN_MS = 220;
-const ENEMY_ICON_W = 28;
-const ENEMY_ICON_H = 36;
-const ENEMY_START_Y = 110;
-const ENEMY_GAP_X = 52;
-const ENEMY_GAP_Y = 42;
+const ENEMY_MOVE_SPEED = 38;
 const ENEMY_DROP = 18;
-const PLAYER_ZONE_Y = 500;
-const PLAYER_ICON_W = 34;
-const PLAYER_ICON_H = 44;
-const ENEMY_FORMATION = [
-  "00111111100",
-  "01101110110",
-  "11111111111",
-  "11011110111",
-  "01100110010",
-];
+const ENEMY_ZONE_Y = 500;
+const ENEMY_SHOT_INTERVAL_MS = 880;
 const GAMEPAD_DEADZONE = 0.45;
-
-const MODE_DELEGATED = "Delegated (Exit Queue Lag)";
-const MODE_STVAULTS = "stVaults (Instant Control)";
-const TEX_ETH = "logo-eth";
-const TEX_LIDO = "logo-lido";
 const HOME_URL = "./index.html";
-const ENEMY_TIERS = [
-  { hp: 3, tint: 0x6efc87 }, // Green: 3 hits
-  { hp: 3, tint: 0x6efc87 },
-  { hp: 2, tint: 0xff6b6b }, // Red: 2 hits
-  { hp: 2, tint: 0xff6b6b },
-  { hp: 1, tint: 0x65b9ff }, // Blue: 1 hit
+
+const MODES = [
+  {
+    key: "delegated",
+    label: "Delegated Staking",
+    shortLabel: "Delegated",
+    copy: "Exit queue lag applies. Inputs arrive late and spikes can get worse without notice.",
+    badge: "Exit Queue In Effect",
+    hudColor: "#ffb2a1",
+    lagMin: 800,
+    lagMax: 2000,
+    spikeMin: 700,
+    spikeMax: 1300,
+    badgeFill: "#4b1f1f",
+    badgeStroke: "#b94949",
+    flashFill: "#5c2828",
+  },
+  {
+    key: "stvaults",
+    label: "stVaults",
+    shortLabel: "stVaults",
+    copy: "Instant control. No queue lag. Markets may remain dynamic, but your inputs do not wait.",
+    badge: "Instant Control",
+    hudColor: "#9fe6ff",
+    lagMin: 0,
+    lagMax: 0,
+    spikeMin: 0,
+    spikeMax: 0,
+    badgeFill: "#113b62",
+    badgeStroke: "#1a9be8",
+    flashFill: "#123657",
+  },
 ];
 
-class StakeInvadersScene extends Phaser.Scene {
-  constructor() {
-    super("StakeInvaders");
+const ENEMY_ROWS = [
+  { pattern: "00111111100", hp: 3, color: "#6efc87" },
+  { pattern: "01101110110", hp: 3, color: "#6efc87" },
+  { pattern: "11111111111", hp: 2, color: "#ff6b6b" },
+  { pattern: "11011110111", hp: 2, color: "#ff6b6b" },
+  { pattern: "01100110010", hp: 1, color: "#65b9ff" },
+];
+
+const INTRO_STAGES = [
+  {
+    title: "Liquid Stakers",
+    body:
+      "Welcome to Liquid Stakers, a game about the opportunity cost of waiting through the Ethereum exit queue.",
+    hint: "Press A, Start, Space, or Enter to continue.",
+  },
+  {
+    title: "Why It Matters",
+    body:
+      "Traditional staking positions can take days or months to unwind. stVaults aim to restore reaction time when markets move.",
+    hint: "Press A, Start, Space, or Enter for rules.",
+  },
+  {
+    title: "Rules",
+    body:
+      "Survive sixty seconds and clear the queue pressure. Blue enemies take one shot, red take two, green take three. If they reach your validator zone, the round ends.",
+    hint: "Press A, Start, Space, or Enter to choose difficulty.",
+  },
+];
+
+const app = document.querySelector("#app");
+app.innerHTML = `
+  <main class="stakers-shell">
+    <section class="stakers-frame">
+      <div class="stakers-topbar">
+        <div class="stakers-brand">LIQUID STAKERS</div>
+        <div class="stakers-subbrand">ETH EXIT QUEUE SIMULATOR</div>
+      </div>
+      <section class="stakers-stage">
+        <canvas class="stakers-canvas" width="${GAME_WIDTH}" height="${GAME_HEIGHT}" aria-label="Liquid Stakers game"></canvas>
+        <div class="stakers-hud">
+          <div class="stakers-chip"><span class="stakers-chip-label">MODE</span><span class="stakers-chip-value" data-hud="mode">Delegated</span></div>
+          <div class="stakers-chip"><span class="stakers-chip-label">SCORE</span><span class="stakers-chip-value" data-hud="score">0</span></div>
+          <div class="stakers-chip"><span class="stakers-chip-label">TIME</span><span class="stakers-chip-value" data-hud="time">60.0s</span></div>
+          <div class="stakers-chip"><span class="stakers-chip-label">LAG</span><span class="stakers-chip-value" data-hud="lag">0ms</span></div>
+          <div class="stakers-chip"><span class="stakers-chip-label">STATUS</span><span class="stakers-chip-value" data-hud="status">Standby</span></div>
+        </div>
+        <div class="stakers-overlay" data-overlay>
+          <div class="stakers-overlay-card" data-overlay-card></div>
+        </div>
+      </section>
+      <div class="stakers-footer" data-footer-hint>Arcade: stick moves, A fires, Start opens menu.</div>
+    </section>
+  </main>
+`;
+
+const canvas = document.querySelector(".stakers-canvas");
+const ctx =
+  canvas.getContext("2d", { alpha: false, desynchronized: true }) ||
+  canvas.getContext("2d");
+canvas.width = Math.round(GAME_WIDTH * DPR * RENDER_SCALE);
+canvas.height = Math.round(GAME_HEIGHT * DPR * RENDER_SCALE);
+canvas.style.width = `${GAME_WIDTH}px`;
+canvas.style.height = `${GAME_HEIGHT}px`;
+ctx.setTransform(DPR * RENDER_SCALE, 0, 0, DPR * RENDER_SCALE, 0, 0);
+
+const overlay = document.querySelector("[data-overlay]");
+const overlayCard = document.querySelector("[data-overlay-card]");
+const footerHint = document.querySelector("[data-footer-hint]");
+
+const hud = {
+  mode: document.querySelector('[data-hud="mode"]'),
+  score: document.querySelector('[data-hud="score"]'),
+  time: document.querySelector('[data-hud="time"]'),
+  lag: document.querySelector('[data-hud="lag"]'),
+  status: document.querySelector('[data-hud="status"]'),
+};
+
+const renderCache = createRenderCache();
+const audio = createAudio();
+
+const input = {
+  keys: Object.create(null),
+  gamepadButtons: Object.create(null),
+  horizontal: 0,
+  vertical: 0,
+  queuedMove: 0,
+  fireHeld: false,
+};
+
+const ui = {
+  introStage: 0,
+  selectedMode: 0,
+  pauseIndex: 0,
+  endIndex: 0,
+};
+
+const state = {
+  screen: "intro",
+  activeMode: MODES[0],
+  gameStarted: false,
+  roundEnded: false,
+  roundStartedAt: 0,
+  elapsedMs: 0,
+  currentLagMs: 0,
+  baseLagMs: 0,
+  inLagSpike: false,
+  nextLagSpikeAt: 0,
+  lagSpikeUntil: 0,
+  inputQueue: [],
+  lastRawMove: 0,
+  appliedMove: 0,
+  player: { x: GAME_WIDTH / 2, y: 548, width: 34, height: 44 },
+  bullets: [],
+  enemies: [],
+  enemyDirection: 1,
+  enemyOffsetY: 0,
+  lastFireAt: -BULLET_COOLDOWN_MS,
+  nextEnemyShotAt: 0,
+  score: 0,
+  endReason: "",
+  effects: [],
+  flashMessage: "",
+  flashAlpha: 0,
+  pauseStartedAt: 0,
+  hudCache: { mode: "", score: "", time: "", lag: "", status: "" },
+  nextHudRefreshAt: 0,
+};
+
+showIntro();
+updateHud(true);
+requestAnimationFrame(frame);
+
+window.addEventListener("keydown", (event) => {
+  input.keys[event.code] = true;
+
+  if (["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD"].includes(event.code)) {
+    event.preventDefault();
   }
 
-  create(data = {}) {
-    this.background();
-    this.createLogoTextures();
+  if (event.code === "KeyH" && state.screen === "playing") {
+    toggleHelp();
+    return;
+  }
 
-    this.roundEnded = false;
-    this.gameStarted = false;
-    this.roundStartedAt = null;
-    this.introStage = data?.difficultyOnly ? 4 : 1;
-    this.musicStarted = false;
-    this.musicStep = 0;
-    this.mode = MODE_DELEGATED;
-    this.pendingAutoStartMode = data?.autoStartMode ?? null;
-    this.baseLagMs = 1200;
-    this.currentLagMs = this.baseLagMs;
-    this.inLagSpike = false;
-    this.nextLagSpikeAt = this.time.now + Phaser.Math.Between(3500, 7000);
-    this.lagSpikeUntil = 0;
-
-    this.inputQueue = [];
-    this.playerState = { moveX: 0, shoot: false };
-    this.gamepadButtons = {};
-    this.gamepadStickHeld = false;
-    this.gamepadVerticalHeld = false;
-    this.startSelectHeld = false;
-    this.menuOpen = false;
-    this.menuIndex = 0;
-    this.menuOptions = [];
-
-    this.score = 0;
-    this.lastFireAt = -BULLET_COOLDOWN_MS;
-
-    this.player = this.add
-      .image(GAME_WIDTH / 2, PLAYER_Y, TEX_ETH)
-      .setDisplaySize(PLAYER_ICON_W, PLAYER_ICON_H);
-
-    this.bullets = this.add.group();
-    this.enemyBullets = this.add.group();
-
-    this.createEnemies();
-
-    this.enemyDirection = 1;
-    this.enemySpeed = 70;
-
-    this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys({
-      a: Phaser.Input.Keyboard.KeyCodes.A,
-      d: Phaser.Input.Keyboard.KeyCodes.D,
-      h: Phaser.Input.Keyboard.KeyCodes.H,
-      one: Phaser.Input.Keyboard.KeyCodes.ONE,
-      two: Phaser.Input.Keyboard.KeyCodes.TWO,
-      enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
-      space: Phaser.Input.Keyboard.KeyCodes.SPACE,
-    });
-
-    this.input.keyboard.on("keydown-ONE", () => this.handleDifficultyChoice(MODE_DELEGATED));
-    this.input.keyboard.on("keydown-TWO", () => this.handleDifficultyChoice(MODE_STVAULTS));
-    this.input.keyboard.on("keydown-H", () => this.toggleHelpOverlay());
-    this.input.keyboard.on("keydown-ENTER", () => this.handlePrimaryAction());
-    this.input.keyboard.on("keydown-SPACE", () => this.handlePrimaryAction());
-
-    this.hudPanel = this.add
-      .rectangle(GAME_WIDTH / 2, 22, GAME_WIDTH - 20, 34, 0x050913, 0.75)
-      .setStrokeStyle(1, 0x395072, 0.8)
-      .setDepth(20);
-    this.hudText = this.add.text(18, 11, "", {
-      fontSize: "16px",
-      color: "#f2f8ff",
-    }).setDepth(21);
-    this.switchModeHintBg = this.add
-      .rectangle(GAME_WIDTH / 2, 54, 360, 24, 0x10233d, 0.9)
-      .setStrokeStyle(1, 0x3f618d, 0.9)
-      .setDepth(21);
-    this.switchModeHint = this.add
-      .text(GAME_WIDTH / 2, 46, "", {
-        fontSize: "13px",
-        color: "#d8ebff",
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(22);
-    this.spikeBadge = this.add
-      .text(GAME_WIDTH - 18, 11, "SPIKE", {
-        fontSize: "15px",
-        color: "#ffffff",
-        backgroundColor: "#d83b3b",
-        padding: { left: 6, right: 6, top: 1, bottom: 1 },
-      })
-      .setOrigin(1, 0)
-      .setDepth(21)
-      .setVisible(false);
-    this.controlsHint = this.add
-      .text(
-        14,
-        GAME_HEIGHT - 20,
-        "Arcade: Stick moves, A fires, L/R pick difficulty, Start or Select opens menu",
-        { fontSize: "14px", color: "#a9bfdc" }
-      )
-      .setOrigin(0, 0.5)
-      .setDepth(20);
-    this.modeTopFlash = this.add
-      .text(GAME_WIDTH / 2, 72, "", {
-        fontSize: "22px",
-        color: "#ffffff",
-        backgroundColor: "#1a9be8",
-        padding: { left: 12, right: 12, top: 6, bottom: 6 },
-      })
-      .setOrigin(0.5)
-      .setDepth(30)
-      .setAlpha(0)
-      .setVisible(false);
-    this.modeBottomPrompt = this.add
-      .text(GAME_WIDTH / 2, 106, "", {
-        fontSize: "18px",
-        color: "#d5f4ff",
-        backgroundColor: "#123657",
-        padding: { left: 10, right: 10, top: 4, bottom: 4 },
-      })
-      .setOrigin(0.5)
-      .setDepth(30)
-      .setAlpha(0)
-      .setVisible(false);
-    this.delegatedInputBadge = this.add
-      .text(GAME_WIDTH - 12, GAME_HEIGHT - 8, "Delegated Staking", {
-        fontSize: "15px",
-        color: "#ffe2e2",
-        backgroundColor: "#4b1f1f",
-        padding: { left: 8, right: 8, top: 4, bottom: 4 },
-      })
-      .setOrigin(1, 1)
-      .setDepth(26)
-      .setAlpha(0.8);
-    this.stvaultsInputBadge = this.add
-      .text(GAME_WIDTH - 12, GAME_HEIGHT - 8, "stVaults", {
-        fontSize: "15px",
-        color: "#d6f8ff",
-        backgroundColor: "#113b62",
-        padding: { left: 8, right: 8, top: 4, bottom: 4 },
-      })
-      .setOrigin(1, 1)
-      .setDepth(26)
-      .setAlpha(0.8);
-
-    this.endGroup = this.add.container(0, 0);
-    this.createIntroOverlay();
-    this.createHelpOverlay();
-    this.createPauseMenu();
-    this.updateInputBadgeVisibility();
-    this.updateModeVisuals();
-    this.updateHUD();
-    this.startMusic();
-
-    if (this.pendingAutoStartMode) {
-      this.setMode(this.pendingAutoStartMode);
-      this.startGame();
+  if (state.screen === "playing") {
+    if (event.code === "Enter") {
+      showPauseMenu();
+      return;
     }
-
-    this.events.on("shutdown", () => this.stopMusic());
-    this.events.on("destroy", () => this.stopMusic());
+    return;
   }
 
-  background() {
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x0d1324);
-    this.add.rectangle(GAME_WIDTH / 2, 132, GAME_WIDTH, 220, 0x111c34, 0.8);
-    this.add.line(0, PLAYER_ZONE_Y, 0, 0, GAME_WIDTH, 0, 0xff5252, 0.55).setOrigin(0, 0.5);
-  }
-
-  createLogoTextures() {
-    const eth = this.make.graphics({ x: 0, y: 0, add: false });
-    eth.fillStyle(0xe6ebff, 1);
-    eth.fillPoints(
-      [
-        new Phaser.Geom.Point(16, 2),
-        new Phaser.Geom.Point(28, 18),
-        new Phaser.Geom.Point(16, 24),
-        new Phaser.Geom.Point(4, 18),
-      ],
-      true
-    );
-    eth.fillStyle(0xb3c0ff, 1);
-    eth.fillPoints(
-      [
-        new Phaser.Geom.Point(16, 26),
-        new Phaser.Geom.Point(28, 20),
-        new Phaser.Geom.Point(16, 42),
-        new Phaser.Geom.Point(4, 20),
-      ],
-      true
-    );
-    eth.generateTexture(TEX_ETH, 32, 44);
-    eth.destroy();
-
-    const lido = this.make.graphics({ x: 0, y: 0, add: false });
-    const lidoBlue = 0x1a9be8;
-
-    // Bottom blue circle
-    lido.fillStyle(lidoBlue, 1);
-    lido.fillCircle(16, 31, 13);
-
-    // White notch between top and bottom sections
-    lido.fillStyle(0xffffff, 1);
-    lido.fillPoints(
-      [
-        new Phaser.Geom.Point(16, 21),
-        new Phaser.Geom.Point(24, 24),
-        new Phaser.Geom.Point(16, 29),
-        new Phaser.Geom.Point(8, 24),
-      ],
-      true
-    );
-
-    // Top outlined droplet
-    lido.lineStyle(4, lidoBlue, 1);
-    lido.beginPath();
-    lido.moveTo(16, 3);
-    lido.lineTo(26, 17);
-    lido.lineTo(16, 23);
-    lido.lineTo(6, 17);
-    lido.closePath();
-    lido.strokePath();
-
-    // Hollow center in droplet
-    lido.fillStyle(0xffffff, 1);
-    lido.fillPoints(
-      [
-        new Phaser.Geom.Point(16, 8),
-        new Phaser.Geom.Point(22, 17),
-        new Phaser.Geom.Point(16, 20),
-        new Phaser.Geom.Point(10, 17),
-      ],
-      true
-    );
-    lido.generateTexture(TEX_LIDO, 32, 44);
-    lido.destroy();
-  }
-
-  createIntroOverlay() {
-    this.modalBackdrop = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x01030a, 0.72)
-      .setDepth(38)
-      .setVisible(true);
-
-    this.introPanel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 730, 470, 0x02060f, 1)
-      .setStrokeStyle(2, 0x3f5e8a, 0.9);
-    this.introTitle = this.add.text(GAME_WIDTH / 2, 170, "Liquid Stakers", {
-      fontSize: "40px",
-      color: "#f4fbff",
-    }).setOrigin(0.5);
-    this.introBody = this.add.text(
-      GAME_WIDTH / 2,
-      200,
-      "",
-      {
-        fontSize: "16px",
-        color: "#d7e9ff",
-        align: "center",
-        wordWrap: { width: 640 },
-        lineSpacing: 8,
+  if (state.screen === "intro") {
+    if (ui.introStage < INTRO_STAGES.length) {
+      if (event.code === "Enter" || event.code === "Space") {
+        ui.introStage += 1;
+        showIntro();
       }
-    ).setOrigin(0.5, 0);
-    this.introHint = this.add.text(
-      GAME_WIDTH / 2,
-      500,
-      "",
-      {
-        fontSize: "20px",
-        color: "#7de2ff",
-        align: "center",
-        wordWrap: { width: 660 },
-      }
-    ).setOrigin(0.5);
-
-    this.introContinueBox = this.add.rectangle(GAME_WIDTH / 2, 500, 260, 40, 0x16365a, 0.88)
-      .setStrokeStyle(1, 0x74d7ff, 0.8);
-
-    this.introGroup = this.add.container(0, 0, [
-      this.introPanel,
-      this.introTitle,
-      this.introBody,
-      this.introContinueBox,
-      this.introHint,
-    ]).setDepth(40);
-
-    this.showIntroStage(this.introStage);
-  }
-
-  showIntroStage(stage) {
-    if (!this.introGroup) return;
-    this.introStage = stage;
-
-    if (stage === 1) {
-      this.introTitle.setText("Liquid Stakers");
-      this.introBody.setText(
-        "Welcome to Liquid Stakers-a game to understand the opportunity costs of the Ethereum Exit Queue.\n\nIn traditional staking, users are subject to rate limits when they want to unwind their position."
-      );
-      this.introHint.setText("[press A or Start to continue]");
-      this.introContinueBox.setDisplaySize(330, 40);
-    } else if (stage === 2) {
-      this.introTitle.setText("Why It Matters");
-      this.introBody.setText(
-        "It can take days (or months!) to exit a native or delegated staking setup.\n\nWith stVaults, stakers can adjust their position on demand - in seconds.\n\nWhy is this important? Markets are dynamic. Reaction time is everything."
-      );
-      this.introHint.setText("[press A or Start for rules]");
-      this.introContinueBox.setDisplaySize(320, 40);
-    } else if (stage === 3) {
-      this.introTitle.setText("Rules");
-      this.introBody.setText(
-        "Survive 60 seconds and score points by clearing invaders.\n\nBlue enemies: 1 shot. Red enemies: 2 shots. Green enemies: 3 shots.\n\nDelegated mode applies delayed inputs plus random lag spikes.\nstVaults mode applies instant input response.\n\nIf enemies reach your validator zone, the round ends."
-      );
-      this.introHint.setText("[press A or Start to choose difficulty]");
-      this.introContinueBox.setDisplaySize(430, 40);
-    } else {
-      this.introTitle.setText("Choose a Difficulty");
-      this.introBody.setText(
-        "Press L or move left for Delegated Staking.\n\nPress R or move right for stVaults."
-      );
-      this.introHint.setText("[L = Delegated, R = stVaults, B = back]");
-      this.introContinueBox.setDisplaySize(420, 40);
-    }
-
-    this.introTitle.setY(170);
-    this.introBody.setY(200);
-    this.introContinueBox.setY(500);
-    this.introHint.setY(500);
-  }
-
-  handlePrimaryAction() {
-    if (this.menuOpen) {
-      this.activatePauseSelection();
-      return;
-    }
-    if (this.helpGroup?.visible) return;
-    if (this.roundEnded) {
-      this.returnToDifficultySelection();
-      return;
-    }
-    if (this.gameStarted) return;
-    this.ensureAudioRunning();
-    if (this.introStage === 1) {
-      this.showIntroStage(2);
-      return;
-    }
-    if (this.introStage === 2) {
-      this.showIntroStage(3);
-      return;
-    }
-    if (this.introStage === 3) {
-      this.showIntroStage(4);
-    }
-  }
-
-  handleDifficultyChoice(mode) {
-    if (this.roundEnded || this.helpGroup?.visible || this.gameStarted) return;
-    if (!this.introGroup || this.introStage !== 4) return;
-    this.setMode(mode);
-    this.startGame();
-  }
-
-  returnToDifficultySelection() {
-    this.closePauseMenu();
-    this.scene.restart({ difficultyOnly: true });
-  }
-
-  createHelpOverlay() {
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 340, 0x071122, 0.96)
-      .setStrokeStyle(2, 0x3c5f8f, 0.9);
-    const title = this.add.text(GAME_WIDTH / 2, 176, "Help", {
-      fontSize: "32px",
-      color: "#f3fbff",
-    }).setOrigin(0.5);
-    const body = this.add.text(
-      GAME_WIDTH / 2,
-      270,
-      "Controls: arcade stick moves, A fires, L chooses Delegated, R chooses stVaults.\nPress Start or Select during a run to open the game menu.\nBlue enemies take 1 shot, red 2, green 3.",
-      {
-        fontSize: "18px",
-        color: "#dcecff",
-        align: "center",
-        wordWrap: { width: 580 },
-        lineSpacing: 9,
-      }
-    ).setOrigin(0.5);
-    const close = this.add.text(GAME_WIDTH / 2, 386, "Press B, A, Start, or Select to close", {
-      fontSize: "18px",
-      color: "#7de2ff",
-    }).setOrigin(0.5);
-
-    this.helpGroup = this.add.container(0, 0, [panel, title, body, close]).setDepth(39).setVisible(false);
-  }
-
-  createPauseMenu() {
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 440, 300, 0x081325, 0.97)
-      .setStrokeStyle(2, 0x61a9f0, 0.92);
-    const title = this.add.text(GAME_WIDTH / 2, 188, "Game Menu", {
-      fontSize: "32px",
-      color: "#f3fbff",
-    }).setOrigin(0.5);
-    this.pauseMenuItems = [0, 1, 2, 3].map((i) =>
-      this.add.text(GAME_WIDTH / 2, 238 + i * 34, "", {
-        fontSize: "22px",
-        color: "#d4e8ff",
-      }).setOrigin(0.5)
-    );
-    const footer = this.add.text(GAME_WIDTH / 2, 360, "Stick: move   A/Start: choose   B: close", {
-      fontSize: "16px",
-      color: "#7de2ff",
-    }).setOrigin(0.5);
-
-    this.pauseMenuGroup = this.add
-      .container(0, 0, [panel, title, ...this.pauseMenuItems, footer])
-      .setDepth(41)
-      .setVisible(false);
-  }
-
-  openPauseMenu() {
-    this.menuOptions = [
-      { label: "Resume", action: () => this.closePauseMenu() },
-      { label: "Restart Round", action: () => this.scene.restart({ difficultyOnly: true, autoStartMode: this.mode }) },
-      { label: "Choose Difficulty", action: () => this.returnToDifficultySelection() },
-      { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
-    ];
-    this.menuIndex = 0;
-    this.menuOpen = true;
-    this.pauseMenuGroup.setVisible(true);
-    if (this.modalBackdrop) this.modalBackdrop.setVisible(true);
-    this.refreshPauseMenu();
-  }
-
-  closePauseMenu() {
-    this.menuOpen = false;
-    this.pauseMenuGroup?.setVisible(false);
-    if (this.modalBackdrop && !this.helpGroup?.visible && !this.introGroup) {
-      this.modalBackdrop.setVisible(false);
-    }
-  }
-
-  refreshPauseMenu() {
-    this.pauseMenuItems.forEach((item, i) => {
-      const selected = i === this.menuIndex;
-      item
-        .setText(`${selected ? ">" : " "} ${this.menuOptions[i]?.label ?? ""}`)
-        .setColor(selected ? "#9ee3ff" : "#d4e8ff");
-    });
-  }
-
-  movePauseSelection(delta) {
-    if (!this.menuOpen) return;
-    this.menuIndex = Phaser.Math.Wrap(this.menuIndex + delta, 0, this.menuOptions.length);
-    this.refreshPauseMenu();
-  }
-
-  activatePauseSelection() {
-    if (!this.menuOpen) return;
-    this.menuOptions[this.menuIndex]?.action?.();
-  }
-
-  toggleHelpOverlay() {
-    if (!this.gameStarted || this.introGroup) return;
-    if (this.roundEnded) return;
-    if (!this.helpGroup) return;
-    const next = !this.helpGroup.visible;
-    this.helpGroup.setVisible(next);
-    this.helpGroup.setAlpha(next ? 1 : 0);
-    if (this.modalBackdrop) {
-      this.modalBackdrop.setVisible(next);
-    }
-    if (next) {
-      this.helpGroup.setAlpha(0);
-      this.tweens.add({
-        targets: this.helpGroup,
-        alpha: 1,
-        duration: 120,
-      });
-    }
-  }
-
-  startGame() {
-    if (this.gameStarted || this.roundEnded) return;
-    this.ensureAudioRunning();
-    this.gameStarted = true;
-    this.roundStartedAt = this.time.now;
-    this.lastRawInput = null;
-    this.inputQueue.length = 0;
-    if (this.introGroup) {
-      this.tweens.add({
-        targets: this.introGroup,
-        alpha: 0,
-        duration: 180,
-        onComplete: () => {
-          this.introGroup.destroy();
-          this.introGroup = null;
-          if (this.modalBackdrop && !this.helpGroup?.visible) {
-            this.modalBackdrop.setVisible(false);
-          }
-          if (this.mode === MODE_DELEGATED) {
-            this.flashDelegatedActivation();
-          } else {
-            this.flashModeActivation();
-          }
-        },
-      });
-    }
-  }
-
-  playShootSound() {
-    const ctx = this.sound?.context;
-    if (!ctx) return;
-
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
-    const start = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = "square";
-    osc.frequency.setValueAtTime(1000, start);
-    osc.frequency.exponentialRampToValueAtTime(420, start + 0.09);
-    osc.detune.setValueAtTime(Phaser.Math.Between(-45, 45), start);
-
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.085, start + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.1);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(start);
-    osc.stop(start + 0.11);
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
-    };
-  }
-
-  midiToHz(midi) {
-    return 440 * Math.pow(2, (midi - 69) / 12);
-  }
-
-  playMusicNote(midi, duration, type, gainLevel, detune = 0) {
-    const ctx = this.sound?.context;
-    if (!ctx || midi == null) return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = type;
-    osc.frequency.setValueAtTime(this.midiToHz(midi), now);
-    osc.detune.setValueAtTime(detune, now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(gainLevel, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + duration + 0.02);
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
-    };
-  }
-
-  tickMusic() {
-    const bass = [40, 43, 47, 43, 38, 42, 45, 42];
-    const counter = [64, 67, 69, 71, 72, 71, 69, 67, 66, 67, 69, 71, 72, 74, 71, 69];
-    const arpeggio = [76, 72, 74, 69, 71, 67, 69, 64];
-
-    const b = bass[this.musicStep % bass.length];
-    const c = counter[this.musicStep % counter.length];
-    const a = arpeggio[(this.musicStep * 2) % arpeggio.length];
-
-    this.playMusicNote(b, 0.19, "triangle", 0.0275, 0);
-    this.playMusicNote(c, 0.14, "square", 0.0163, Phaser.Math.Between(-6, 6));
-
-    if (this.musicStep % 2 === 0) {
-      this.playMusicNote(a, 0.11, "sawtooth", 0.0113, Phaser.Math.Between(-10, 10));
-    }
-
-    // Glitch accent for a retro-electronic edge.
-    if (this.musicStep % 16 === 7 || Phaser.Math.Between(0, 28) === 0) {
-      this.playMusicNote(c + 12, 0.05, "square", 0.01, Phaser.Math.Between(-120, 120));
-    }
-
-    this.musicStep += 1;
-  }
-
-  startMusic() {
-    if (this.musicStarted) return;
-    const ctx = this.sound?.context;
-    if (!ctx) return;
-    this.musicStarted = true;
-    this.musicStep = 0;
-    this.musicEvent = this.time.addEvent({
-      delay: 180,
-      loop: true,
-      callback: this.tickMusic,
-      callbackScope: this,
-    });
-  }
-
-  stopMusic() {
-    if (this.musicEvent) {
-      this.musicEvent.remove(false);
-      this.musicEvent = null;
-    }
-    this.musicStarted = false;
-  }
-
-  ensureAudioRunning() {
-    const ctx = this.sound?.context;
-    if (!ctx) return;
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-  }
-
-  createEnemies() {
-    this.enemies = this.add.group();
-    const cols = ENEMY_FORMATION[0].length;
-    const startX = GAME_WIDTH / 2 - ((cols - 1) * ENEMY_GAP_X) / 2;
-
-    for (let row = 0; row < ENEMY_FORMATION.length; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        if (ENEMY_FORMATION[row][col] !== "1") continue;
-        const x = startX + col * ENEMY_GAP_X;
-        const y = ENEMY_START_Y + row * ENEMY_GAP_Y;
-        const tier = ENEMY_TIERS[row] ?? ENEMY_TIERS[ENEMY_TIERS.length - 1];
-        const enemy = this.add
-          .image(x, y, TEX_ETH)
-          .setDisplaySize(ENEMY_ICON_W, ENEMY_ICON_H)
-          .setTint(tier.tint);
-        enemy.setData("hp", tier.hp);
-        enemy.setData("maxHp", tier.hp);
-        this.enemies.add(enemy);
-      }
-    }
-  }
-
-  currentTextureKey() {
-    return this.mode === MODE_STVAULTS ? TEX_LIDO : TEX_ETH;
-  }
-
-  updateModeVisuals() {
-    const key = this.currentTextureKey();
-    this.player.setTexture(key).setDisplaySize(PLAYER_ICON_W, PLAYER_ICON_H);
-    this.enemies
-      .getChildren()
-      .forEach((enemy) => enemy.setTexture(key).setDisplaySize(ENEMY_ICON_W, ENEMY_ICON_H));
-  }
-
-  setMode(mode) {
-    if (this.roundEnded) return;
-    this.mode = mode;
-    if (mode === MODE_STVAULTS) {
-      this.baseLagMs = 0;
-      this.currentLagMs = 0;
-      this.inLagSpike = false;
-      this.inputQueue.length = 0;
-    } else {
-      this.baseLagMs = Phaser.Math.Between(800, 2000);
-      this.currentLagMs = this.baseLagMs;
-      this.nextLagSpikeAt = this.time.now + Phaser.Math.Between(3000, 6500);
-    }
-    this.updateInputBadgeVisibility();
-    this.updateModeVisuals();
-    this.updateHUD();
-  }
-
-  updateInputBadgeVisibility() {
-    const delegated = this.mode === MODE_DELEGATED;
-    this.delegatedInputBadge.setText("Delegated Staking");
-    this.stvaultsInputBadge.setText("stVaults");
-    this.delegatedInputBadge.setVisible(delegated);
-    this.stvaultsInputBadge.setVisible(!delegated);
-  }
-
-  flashInputBadge() {
-    const target = this.mode === MODE_DELEGATED ? this.delegatedInputBadge : this.stvaultsInputBadge;
-    const flashText = this.mode === MODE_DELEGATED ? "Delayed Reaction" : "Instant Liquidity";
-    const idleText = this.mode === MODE_DELEGATED ? "Delegated Staking" : "stVaults";
-    this.tweens.killTweensOf(target);
-    target.setText(flashText);
-    target.setAlpha(1).setScale(1.03);
-    this.tweens.add({
-      targets: target,
-      alpha: 0.8,
-      scaleX: 1,
-      scaleY: 1,
-      duration: 170,
-      ease: "Quad.Out",
-      onComplete: () => target.setText(idleText),
-    });
-  }
-
-  flashModeActivation() {
-    this.flashModeNotice(
-      "stVaults Mode (Instant Liquidity)",
-      "Difficulty selected for this round",
-      "#1a9be8",
-      "#113b62"
-    );
-  }
-
-  flashDelegatedActivation() {
-    this.flashModeNotice(
-      "Delegated Staking Mode (Exit Queue In Effect)",
-      "Difficulty selected for this round",
-      "#b94949",
-      "#4b1f1f"
-    );
-  }
-
-  flashModeNotice(topText, bottomText, topBg, bottomBg) {
-    this.tweens.killTweensOf(this.modeTopFlash);
-    this.tweens.killTweensOf(this.modeBottomPrompt);
-
-    this.modeTopFlash
-      .setText(topText)
-      .setStyle({ backgroundColor: topBg })
-      .setVisible(true)
-      .setAlpha(1)
-      .setScale(0.94);
-    this.modeBottomPrompt
-      .setText(bottomText)
-      .setStyle({ backgroundColor: bottomBg })
-      .setVisible(true)
-      .setAlpha(1)
-      .setScale(0.94);
-
-    this.tweens.add({
-      targets: [this.modeTopFlash, this.modeBottomPrompt],
-      scaleX: 1,
-      scaleY: 1,
-      duration: 90,
-      ease: "Back.Out",
-    });
-    this.tweens.add({
-      targets: [this.modeTopFlash, this.modeBottomPrompt],
-      alpha: 0,
-      delay: 1230,
-      duration: 390,
-      ease: "Quad.In",
-      onComplete: () => {
-        this.modeTopFlash.setVisible(false);
-        this.modeBottomPrompt.setVisible(false);
-      },
-    });
-  }
-
-  sampleLag(now) {
-    if (this.mode === MODE_STVAULTS) {
-      this.inLagSpike = false;
-      this.currentLagMs = 0;
-      return;
-    }
-
-    if (!this.inLagSpike && now >= this.nextLagSpikeAt) {
-      this.inLagSpike = true;
-      const spikeDuration = Phaser.Math.Between(600, 1300);
-      this.lagSpikeUntil = now + spikeDuration;
-      const spikeBoost = Phaser.Math.Between(700, 1300);
-      this.currentLagMs = this.baseLagMs + spikeBoost;
-    }
-
-    if (this.inLagSpike && now >= this.lagSpikeUntil) {
-      this.inLagSpike = false;
-      this.baseLagMs = Phaser.Math.Between(800, 2000);
-      this.currentLagMs = this.baseLagMs;
-      this.nextLagSpikeAt = now + Phaser.Math.Between(3500, 8000);
-    }
-
-    if (!this.inLagSpike) {
-      this.currentLagMs = this.baseLagMs;
-    }
-  }
-
-  captureRawInput() {
-    const pad = this.getPrimaryGamepad();
-    const left = this.cursors.left.isDown || this.keys.a.isDown || this.isPadLeft(pad);
-    const right = this.cursors.right.isDown || this.keys.d.isDown || this.isPadRight(pad);
-    const moveX = (right ? 1 : 0) - (left ? 1 : 0);
-    const shoot = this.cursors.space.isDown || this.keys.space.isDown || this.isPadShootPressed(pad);
-    return { moveX, shoot };
-  }
-
-  getPrimaryGamepad() {
-    const pads = navigator.getGamepads?.() ?? [];
-    return pads.find((pad) => pad?.connected) ?? null;
-  }
-
-  isPadLeft(pad) {
-    if (!pad) return false;
-    return (pad.axes[0] ?? 0) <= -GAMEPAD_DEADZONE || !!pad.buttons[14]?.pressed;
-  }
-
-  isPadRight(pad) {
-    if (!pad) return false;
-    return (pad.axes[0] ?? 0) >= GAMEPAD_DEADZONE || !!pad.buttons[15]?.pressed;
-  }
-
-  isPadShootPressed(pad) {
-    if (!pad) return false;
-    return !!pad.buttons[0]?.pressed || !!pad.buttons[2]?.pressed;
-  }
-
-  consumeGamepadEdge(name, isDown) {
-    const wasDown = !!this.gamepadButtons[name];
-    this.gamepadButtons[name] = isDown;
-    return isDown && !wasDown;
-  }
-
-  pollGamepadUi() {
-    const pad = this.getPrimaryGamepad();
-    if (!pad) {
-      this.gamepadStickHeld = false;
-      this.gamepadVerticalHeld = false;
-      this.startSelectHeld = false;
-      return;
-    }
-
-    const primaryPressed =
-      this.consumeGamepadEdge("primary0", !!pad.buttons[0]?.pressed) ||
-      this.consumeGamepadEdge("primary2", !!pad.buttons[2]?.pressed) ||
-      this.consumeGamepadEdge("start", !!pad.buttons[9]?.pressed);
-    const helpPressed = this.consumeGamepadEdge("help", !!pad.buttons[3]?.pressed);
-    const resetPressed = this.consumeGamepadEdge("reset", !!pad.buttons[8]?.pressed);
-    const backPressed = this.consumeGamepadEdge("back", !!pad.buttons[1]?.pressed);
-    const regularPressed = this.consumeGamepadEdge("regular", !!pad.buttons[4]?.pressed);
-    const liquidPressed = this.consumeGamepadEdge("liquid", !!pad.buttons[5]?.pressed);
-
-    const left = this.isPadLeft(pad);
-    const right = this.isPadRight(pad);
-    const up = (pad.axes[1] ?? 0) <= -GAMEPAD_DEADZONE || !!pad.buttons[12]?.pressed;
-    const down = (pad.axes[1] ?? 0) >= GAMEPAD_DEADZONE || !!pad.buttons[13]?.pressed;
-    const axisActive = left || right;
-    const verticalActive = up || down;
-    const leftPressed = left && !this.gamepadStickHeld;
-    const rightPressed = right && !this.gamepadStickHeld;
-    const upPressed = up && !this.gamepadVerticalHeld;
-    const downPressed = down && !this.gamepadVerticalHeld;
-    this.gamepadStickHeld = axisActive;
-    this.gamepadVerticalHeld = verticalActive;
-
-    const startSelectHeld = !!pad.buttons[8]?.pressed && !!pad.buttons[9]?.pressed;
-    const startSelectPressed = startSelectHeld && !this.startSelectHeld;
-    this.startSelectHeld = startSelectHeld;
-
-    if (startSelectPressed) {
-      window.location.href = HOME_URL;
-      return;
-    }
-
-    if (helpPressed && this.gameStarted && !this.roundEnded) {
-      this.toggleHelpOverlay();
-    }
-
-    if (this.helpGroup?.visible) {
-      if (helpPressed || primaryPressed || resetPressed || backPressed) {
-        this.toggleHelpOverlay();
+      if (event.code === "Escape" && ui.introStage > 0) {
+        ui.introStage -= 1;
+        showIntro();
       }
       return;
     }
-
-    if (this.menuOpen) {
-      if (upPressed) this.movePauseSelection(-1);
-      if (downPressed) this.movePauseSelection(1);
-      if (primaryPressed) this.activatePauseSelection();
-      if (backPressed || resetPressed) this.closePauseMenu();
+    if (event.code === "ArrowLeft" || event.code === "KeyA") {
+      ui.selectedMode = 0;
+      showIntro();
       return;
     }
-
-    if (this.roundEnded) {
-      if (primaryPressed || resetPressed || backPressed) this.returnToDifficultySelection();
+    if (event.code === "ArrowRight" || event.code === "KeyD") {
+      ui.selectedMode = 1;
+      showIntro();
       return;
     }
+    if (event.code === "Enter" || event.code === "Space") {
+      startGame(MODES[ui.selectedMode]);
+    }
+    if (event.code === "Escape") {
+      ui.introStage = INTRO_STAGES.length - 1;
+      showIntro();
+    }
+    return;
+  }
 
-    if (!this.gameStarted) {
-      if (this.introStage < 4) {
-        if (backPressed && this.introStage > 1) this.showIntroStage(this.introStage - 1);
-        if (primaryPressed) this.handlePrimaryAction();
-        return;
-      }
-
-      if (backPressed) {
-        this.showIntroStage(3);
-        return;
-      }
-      if (regularPressed) this.handleDifficultyChoice(MODE_DELEGATED);
-      if (liquidPressed) this.handleDifficultyChoice(MODE_STVAULTS);
-      if (leftPressed) this.handleDifficultyChoice(MODE_DELEGATED);
-      if (rightPressed) this.handleDifficultyChoice(MODE_STVAULTS);
-      if (this.consumeGamepadEdge("delegated", !!pad.buttons[14]?.pressed)) {
-        this.handleDifficultyChoice(MODE_DELEGATED);
-      }
-      if (this.consumeGamepadEdge("stvaults", !!pad.buttons[15]?.pressed)) {
-        this.handleDifficultyChoice(MODE_STVAULTS);
-      }
-      if (primaryPressed) {
-        this.handleDifficultyChoice(left ? MODE_DELEGATED : MODE_STVAULTS);
-      }
+  if (state.screen === "pause") {
+    if (event.code === "ArrowUp") {
+      ui.pauseIndex = (ui.pauseIndex + 3) % 4;
+      showPauseMenu();
       return;
     }
-
-    if (this.consumeGamepadEdge("menuStart", !!pad.buttons[9]?.pressed) || resetPressed) {
-      this.openPauseMenu();
+    if (event.code === "ArrowDown") {
+      ui.pauseIndex = (ui.pauseIndex + 1) % 4;
+      showPauseMenu();
       return;
     }
-
-    if (backPressed) {
-      this.openPauseMenu();
-    }
-  }
-
-  enqueueInput(now) {
-    const raw = this.captureRawInput();
-    const previous = this.lastRawInput;
-    const changed = !previous || previous.moveX !== raw.moveX || previous.shoot !== raw.shoot;
-    if (!changed) return;
-
-    this.lastRawInput = raw;
-    if (this.gameStarted && !this.roundEnded) {
-      this.flashInputBadge();
-    }
-    this.inputQueue.push({
-      tApply: now + this.currentLagMs,
-      moveX: raw.moveX,
-      shoot: raw.shoot,
-    });
-  }
-
-  applyQueuedInput(now) {
-    while (this.inputQueue.length && this.inputQueue[0].tApply <= now) {
-      const next = this.inputQueue.shift();
-      this.playerState.moveX = next.moveX;
-      this.playerState.shoot = next.shoot;
-    }
-  }
-
-  movePlayer(deltaSec) {
-    this.player.x += this.playerState.moveX * PLAYER_SPEED * deltaSec;
-    this.player.x = Phaser.Math.Clamp(this.player.x, 24, GAME_WIDTH - 24);
-  }
-
-  fireBullet(now) {
-    if (!this.playerState.shoot) return;
-    if (now - this.lastFireAt < BULLET_COOLDOWN_MS) return;
-
-    this.lastFireAt = now;
-    const bullet = this.add.rectangle(this.player.x, this.player.y - 16, 6, 16, 0xd4ecff);
-    this.bullets.add(bullet);
-    this.playShootSound();
-  }
-
-  updateBullets(deltaSec) {
-    const dy = BULLET_SPEED * deltaSec;
-    this.bullets.getChildren().forEach((bullet) => {
-      bullet.y += dy;
-      if (bullet.y < -20) {
-        this.bullets.remove(bullet, true, true);
-      }
-    });
-  }
-
-  updateEnemies(deltaSec) {
-    const shift = this.enemyDirection * this.enemySpeed * deltaSec;
-    let hitEdge = false;
-
-    this.enemies.getChildren().forEach((enemy) => {
-      enemy.x += shift;
-      if (enemy.x > GAME_WIDTH - 30 || enemy.x < 30) {
-        hitEdge = true;
-      }
-    });
-
-    if (hitEdge) {
-      this.enemyDirection *= -1;
-      this.enemies.getChildren().forEach((enemy) => {
-        enemy.y += ENEMY_DROP;
-      });
-    }
-
-    const reachedZone = this.enemies
-      .getChildren()
-      .some((enemy) => enemy.y + enemy.displayHeight / 2 >= PLAYER_ZONE_Y);
-
-    if (reachedZone) {
-      this.endRound("Enemy front reached your validator zone.");
-    }
-  }
-
-  resolveCollisions() {
-    const bullets = this.bullets.getChildren();
-    const enemies = this.enemies.getChildren();
-
-    bullets.forEach((bullet) => {
-      for (let i = 0; i < enemies.length; i += 1) {
-        const enemy = enemies[i];
-        if (!enemy.active) continue;
-        if (Phaser.Geom.Intersects.RectangleToRectangle(bullet.getBounds(), enemy.getBounds())) {
-          this.bullets.remove(bullet, true, true);
-          const hp = enemy.getData("hp") ?? 1;
-          const nextHp = hp - 1;
-          enemy.setData("hp", nextHp);
-          this.showHitEffect(enemy.x, enemy.y, nextHp <= 0);
-
-          if (nextHp <= 0) {
-            this.enemies.remove(enemy, true, true);
-            const maxHp = enemy.getData("maxHp") ?? 1;
-            this.score += 10 * maxHp;
-          } else {
-            this.tweens.killTweensOf(enemy);
-            enemy.setAlpha(0.45);
-            this.tweens.add({
-              targets: enemy,
-              alpha: 1,
-              scaleX: 1.12,
-              scaleY: 1.12,
-              yoyo: true,
-              duration: 70,
-              ease: "Quad.Out",
-            });
-          }
-          break;
-        }
-      }
-    });
-
-    if (this.enemies.countActive(true) === 0) {
-      this.endRound("You cleared all queue pressure before timeout.");
-    }
-  }
-
-  showHitEffect(x, y, isKill) {
-    const color = isKill ? 0xffe38c : 0xbdd9ff;
-    const burst = this.add.circle(x, y, 5, color, 0.85).setDepth(19);
-    this.tweens.add({
-      targets: burst,
-      radius: isKill ? 22 : 14,
-      alpha: 0,
-      duration: isKill ? 180 : 120,
-      ease: "Cubic.Out",
-      onComplete: () => burst.destroy(),
-    });
-  }
-
-  endRound(reason) {
-    if (this.roundEnded) return;
-    this.roundEnded = true;
-
-    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 560, 280, 0x02040a, 0.88);
-    const title = this.add.text(GAME_WIDTH / 2, 220, "Round Complete", {
-      fontSize: "40px",
-      color: "#f7fbff",
-    }).setOrigin(0.5);
-
-    const score = this.add.text(GAME_WIDTH / 2, 275, `Score: ${this.score}`, {
-      fontSize: "28px",
-      color: "#8fe0ff",
-    }).setOrigin(0.5);
-
-    const mode = this.add.text(GAME_WIDTH / 2, 314, `Mode: ${this.mode}`, {
-      fontSize: "22px",
-      color: "#ffd17f",
-    }).setOrigin(0.5);
-
-    const explain = this.add.text(
-      GAME_WIDTH / 2,
-      352,
-      this.mode === MODE_DELEGATED
-        ? "Delegated staking adds queue lag and spikes before control updates apply."
-        : "stVaults apply your inputs instantly, so control remains responsive.",
-      {
-        fontSize: "18px",
-        color: "#f7fbff",
-        align: "center",
-        wordWrap: { width: 500 },
-      }
-    ).setOrigin(0.5);
-
-    const detail = this.add.text(GAME_WIDTH / 2, 400, reason, {
-      fontSize: "16px",
-      color: "#c7d7ec",
-      align: "center",
-      wordWrap: { width: 520 },
-    }).setOrigin(0.5);
-
-    const restart = this.add.text(GAME_WIDTH / 2, 444, "Press A, B, Start, or Select for menu options", {
-      fontSize: "24px",
-      color: "#ff9f9f",
-    }).setOrigin(0.5);
-
-    this.endGroup.add([overlay, title, score, mode, explain, detail, restart]);
-  }
-
-  updateHUD() {
-    const elapsed = this.gameStarted && this.roundStartedAt ? this.time.now - this.roundStartedAt : 0;
-    const remaining = Math.max(0, ROUND_LENGTH_MS - elapsed);
-    const modeLabel = this.mode === MODE_DELEGATED ? "Delegated" : "stVaults";
-    const modeHint =
-      this.mode === MODE_DELEGATED
-        ? "Difficulty: Delegated Staking (chosen in intro)"
-        : "Difficulty: stVaults Staking (chosen in intro)";
-    this.hudText.setText(
-      `Score ${this.score}   Time ${(remaining / 1000).toFixed(1)}s   Mode ${modeLabel}   Lag ${Math.round(this.currentLagMs)}ms`
-    );
-    this.switchModeHint.setText(modeHint);
-    this.spikeBadge.setVisible(this.inLagSpike);
-  }
-
-  update(_, delta) {
-    const now = this.time.now;
-    const deltaSec = delta / 1000;
-
-    this.pollGamepadUi();
-
-    if (this.roundEnded) {
-      this.updateHUD();
+    if (event.code === "Enter" || event.code === "Space") {
+      activatePauseItem();
       return;
     }
-    if (!this.gameStarted) {
-      this.updateHUD();
+    if (event.code === "Escape") {
+      resumeGame();
+    }
+    return;
+  }
+
+  if (state.screen === "help") {
+    if (event.code === "Escape" || event.code === "Enter" || event.code === "Space") {
+      closeHelp();
+    }
+    return;
+  }
+
+  if (state.screen === "gameover") {
+    if (event.code === "ArrowLeft" || event.code === "KeyA") {
+      ui.endIndex = 0;
+      showGameOver();
       return;
     }
-    if (this.helpGroup?.visible) {
-      this.updateHUD();
+    if (event.code === "ArrowRight" || event.code === "KeyD") {
+      ui.endIndex = 1;
+      showGameOver();
       return;
     }
-
-    this.sampleLag(now);
-    this.enqueueInput(now);
-    this.applyQueuedInput(now);
-
-    this.movePlayer(deltaSec);
-    this.fireBullet(now);
-    this.updateBullets(deltaSec);
-    this.updateEnemies(deltaSec);
-    this.resolveCollisions();
-
-    if (this.roundStartedAt && now - this.roundStartedAt >= ROUND_LENGTH_MS) {
-      this.endRound("Time expired while queue pressure remained.");
+    if (event.code === "Enter" || event.code === "Space") {
+      if (ui.endIndex === 0) {
+        startGame(state.activeMode);
+      } else {
+        resetToIntro();
+      }
     }
+  }
+});
 
-    this.updateHUD();
+window.addEventListener("keyup", (event) => {
+  input.keys[event.code] = false;
+});
+
+canvas.addEventListener("pointerdown", () => {
+  if (state.screen === "playing") {
+    attemptFire(performance.now());
+  } else if (state.screen === "intro" && ui.introStage >= INTRO_STAGES.length) {
+    startGame(MODES[ui.selectedMode]);
+  }
+});
+
+overlay.addEventListener("pointerdown", (event) => {
+  const target = event.target instanceof Element ? event.target.closest("[data-action]") : null;
+  if (!target) return;
+  const action = target.getAttribute("data-action");
+  if (action === "next-intro") {
+    ui.introStage = Math.min(INTRO_STAGES.length, ui.introStage + 1);
+    showIntro();
+  } else if (action === "pick-mode") {
+    ui.selectedMode = Number.parseInt(target.getAttribute("data-index") || "0", 10) || 0;
+    startGame(MODES[ui.selectedMode]);
+  } else if (action === "resume") {
+    resumeGame();
+  } else if (action === "restart") {
+    startGame(state.activeMode);
+  } else if (action === "difficulty") {
+    resetToIntro(true);
+  } else if (action === "home") {
+    window.location.href = HOME_URL;
+  } else if (action === "close-help") {
+    closeHelp();
+  } else if (action === "mode-select") {
+    resetToIntro(true);
+  }
+});
+
+function frame(now) {
+  pollGamepad();
+
+  if (state.screen === "playing") {
+    updateGame(now);
+  }
+
+  render();
+  requestAnimationFrame(frame);
+}
+
+function updateGame(now) {
+  if (!state.gameStarted || state.roundEnded) return;
+
+  if (!state.roundStartedAt) {
+    state.roundStartedAt = now;
+    state.nextEnemyShotAt = now + ENEMY_SHOT_INTERVAL_MS;
+  }
+
+  state.elapsedMs = now - state.roundStartedAt;
+  sampleLag(now);
+  captureQueuedInput(now);
+  applyQueuedInput(now);
+
+  state.player.x += state.appliedMove * PLAYER_SPEED * (1 / 60);
+  state.player.x = clamp(state.player.x, 30, GAME_WIDTH - 30);
+
+  updateBullets();
+  updateEnemies(now);
+  resolveCollisions();
+  updateEffects();
+
+  if (state.elapsedMs >= ROUND_LENGTH_MS) {
+    endRound("Time expired while queue pressure remained.");
+  }
+
+  if (now >= state.nextHudRefreshAt) {
+    updateHud();
+    state.nextHudRefreshAt = now + 120;
   }
 }
 
-const config = {
-  type: Phaser.CANVAS,
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
-  parent: "app",
-  backgroundColor: "#060913",
-  scene: [StakeInvadersScene],
-};
+function sampleLag(now) {
+  if (state.activeMode.key === "stvaults") {
+    state.baseLagMs = 0;
+    state.currentLagMs = 0;
+    state.inLagSpike = false;
+    return;
+  }
 
-new Phaser.Game(config);
+  if (!state.baseLagMs) {
+    state.baseLagMs = randomBetween(state.activeMode.lagMin, state.activeMode.lagMax);
+    state.currentLagMs = state.baseLagMs;
+    state.nextLagSpikeAt = now + randomBetween(3500, 7000);
+  }
+
+  if (!state.inLagSpike && now >= state.nextLagSpikeAt) {
+    state.inLagSpike = true;
+    state.lagSpikeUntil = now + randomBetween(650, 1300);
+    state.currentLagMs = state.baseLagMs + randomBetween(state.activeMode.spikeMin, state.activeMode.spikeMax);
+  }
+
+  if (state.inLagSpike && now >= state.lagSpikeUntil) {
+    state.inLagSpike = false;
+    state.baseLagMs = randomBetween(state.activeMode.lagMin, state.activeMode.lagMax);
+    state.currentLagMs = state.baseLagMs;
+    state.nextLagSpikeAt = now + randomBetween(3200, 7600);
+  }
+
+  if (!state.inLagSpike) {
+    state.currentLagMs = state.baseLagMs;
+  }
+}
+
+function captureQueuedInput(now) {
+  const move = getRawMove();
+  const fire = isFirePressed();
+
+  if (state.activeMode.key === "stvaults") {
+    state.appliedMove = move;
+    if (fire && !input.fireHeld) {
+      attemptFire(now);
+    }
+    input.fireHeld = fire;
+    return;
+  }
+
+  if (move !== state.lastRawMove) {
+    state.lastRawMove = move;
+    state.inputQueue.push({
+      applyAt: now + state.currentLagMs,
+      move,
+    });
+  }
+
+  if (fire && !input.fireHeld) {
+    state.inputQueue.push({
+      applyAt: now + state.currentLagMs,
+      fire: true,
+    });
+  }
+  input.fireHeld = fire;
+}
+
+function applyQueuedInput(now) {
+  let read = 0;
+  let write = 0;
+  while (read < state.inputQueue.length) {
+    const item = state.inputQueue[read];
+    if (item.applyAt <= now) {
+      if (typeof item.move === "number") {
+        state.appliedMove = item.move;
+      }
+      if (item.fire) {
+        attemptFire(now);
+      }
+    } else {
+      state.inputQueue[write] = item;
+      write += 1;
+    }
+    read += 1;
+  }
+  state.inputQueue.length = write;
+}
+
+function attemptFire(now) {
+  if (now - state.lastFireAt < BULLET_COOLDOWN_MS) return;
+  state.lastFireAt = now;
+  state.bullets.push({
+    x: state.player.x,
+    y: state.player.y - 26,
+    width: 6,
+    height: 16,
+  });
+  audio.shoot();
+}
+
+function updateBullets() {
+  let write = 0;
+  for (let index = 0; index < state.bullets.length; index += 1) {
+    const bullet = state.bullets[index];
+    bullet.y -= BULLET_SPEED / 60;
+    if (bullet.y + bullet.height * 0.5 >= 0) {
+      state.bullets[write] = bullet;
+      write += 1;
+    }
+  }
+  state.bullets.length = write;
+}
+
+function updateEnemies(now) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let lowestY = 0;
+
+  for (const enemy of state.enemies) {
+    enemy.x += state.enemyDirection * ENEMY_MOVE_SPEED / 60;
+    minX = Math.min(minX, enemy.x - enemy.width * 0.5);
+    maxX = Math.max(maxX, enemy.x + enemy.width * 0.5);
+    lowestY = Math.max(lowestY, enemy.y + enemy.height * 0.5);
+  }
+
+  if (minX <= 28 || maxX >= GAME_WIDTH - 28) {
+    state.enemyDirection *= -1;
+    for (const enemy of state.enemies) {
+      enemy.y += ENEMY_DROP;
+    }
+    lowestY += ENEMY_DROP;
+  }
+
+  if (lowestY >= ENEMY_ZONE_Y) {
+    endRound("Enemy front reached your validator zone.");
+    return;
+  }
+
+  if (now >= state.nextEnemyShotAt && state.enemies.length) {
+    const shooter = state.enemies[(Math.random() * state.enemies.length) | 0];
+    state.effects.push({
+      type: "beam",
+      x: shooter.x,
+      y: shooter.y + 20,
+      life: LOW_PERF_DEVICE ? 10 : 14,
+    });
+    state.nextEnemyShotAt = now + ENEMY_SHOT_INTERVAL_MS;
+  }
+}
+
+function resolveCollisions() {
+  let bulletWrite = 0;
+  for (let bulletIndex = 0; bulletIndex < state.bullets.length; bulletIndex += 1) {
+    const bullet = state.bullets[bulletIndex];
+    let hit = false;
+
+    for (let enemyIndex = 0; enemyIndex < state.enemies.length; enemyIndex += 1) {
+      const enemy = state.enemies[enemyIndex];
+      if (!rectsOverlap(bullet, enemy)) continue;
+
+      hit = true;
+      enemy.hp -= 1;
+      if (!LOW_PERF_DEVICE) {
+        state.effects.push({
+          type: "ring",
+          x: enemy.x,
+          y: enemy.y,
+          life: 12,
+          color: enemy.hp <= 0 ? "#ffe38c" : "#bdd9ff",
+        });
+      }
+
+      if (enemy.hp <= 0) {
+        state.score += 10 * enemy.maxHp;
+        state.enemies.splice(enemyIndex, 1);
+        enemyIndex -= 1;
+      }
+      break;
+    }
+
+    if (!hit) {
+      state.bullets[bulletWrite] = bullet;
+      bulletWrite += 1;
+    }
+  }
+  state.bullets.length = bulletWrite;
+
+  if (!state.enemies.length) {
+    endRound("You cleared all queue pressure before timeout.");
+  }
+}
+
+function updateEffects() {
+  let write = 0;
+  for (let index = 0; index < state.effects.length; index += 1) {
+    const effect = state.effects[index];
+    effect.life -= 1;
+    if (effect.life > 0) {
+      state.effects[write] = effect;
+      write += 1;
+    }
+  }
+  state.effects.length = write;
+
+  if (state.flashAlpha > 0) {
+    state.flashAlpha = Math.max(0, state.flashAlpha - 0.025);
+  }
+}
+
+function render() {
+  ctx.drawImage(renderCache.background, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+  drawValidatorZone();
+  drawEffects();
+  drawBullets();
+  drawEnemies();
+  drawPlayer();
+  drawFlashMessage();
+}
+
+function drawValidatorZone() {
+  ctx.strokeStyle = state.activeMode.key === "delegated" ? "#b94949" : "#1a9be8";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, ENEMY_ZONE_Y);
+  ctx.lineTo(GAME_WIDTH, ENEMY_ZONE_Y);
+  ctx.stroke();
+}
+
+function drawPlayer() {
+  const sprite = state.activeMode.key === "delegated" ? renderCache.ethSprite : renderCache.lidoSprite;
+  ctx.drawImage(sprite, state.player.x - 17, state.player.y - 22);
+}
+
+function drawBullets() {
+  ctx.fillStyle = "#d4ecff";
+  for (const bullet of state.bullets) {
+    ctx.fillRect(bullet.x - bullet.width * 0.5, bullet.y - bullet.height * 0.5, bullet.width, bullet.height);
+  }
+}
+
+function drawEnemies() {
+  for (const enemy of state.enemies) {
+    const sprite = state.activeMode.key === "delegated" ? renderCache.ethSprite : renderCache.lidoSprite;
+    ctx.globalAlpha = enemy.hp < enemy.maxHp ? 0.82 : 1;
+    ctx.drawImage(sprite, enemy.x - 14, enemy.y - 18, 28, 36);
+    ctx.globalAlpha = 1;
+
+    if (enemy.maxHp > 1) {
+      ctx.fillStyle = "rgba(7, 16, 30, 0.84)";
+      ctx.fillRect(enemy.x - 16, enemy.y + 22, 32, 6);
+      ctx.fillStyle = enemy.color;
+      ctx.fillRect(enemy.x - 16, enemy.y + 22, (32 * enemy.hp) / enemy.maxHp, 6);
+    }
+  }
+}
+
+function drawEffects() {
+  for (const effect of state.effects) {
+    if (effect.type === "ring") {
+      ctx.strokeStyle = effect.color;
+      ctx.globalAlpha = effect.life / 12;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, 14 - effect.life * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "beam") {
+      ctx.strokeStyle = "rgba(255, 191, 112, 0.3)";
+      ctx.globalAlpha = effect.life / 14;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(effect.x, effect.y);
+      ctx.lineTo(effect.x, ENEMY_ZONE_Y);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFlashMessage() {
+  if (!state.flashAlpha || !state.flashMessage) return;
+  ctx.globalAlpha = state.flashAlpha;
+  ctx.fillStyle = state.activeMode.flashFill;
+  ctx.fillRect(210, 80, 380, 38);
+  ctx.strokeStyle = state.activeMode.badgeStroke;
+  ctx.strokeRect(210, 80, 380, 38);
+  ctx.fillStyle = "#f4fbff";
+  ctx.font = "bold 18px Trebuchet MS, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(state.flashMessage, GAME_WIDTH / 2, 99);
+  ctx.globalAlpha = 1;
+}
+
+function showIntro() {
+  state.screen = "intro";
+  state.roundEnded = false;
+  overlay.classList.remove("is-hidden");
+
+  if (ui.introStage < INTRO_STAGES.length) {
+    const stage = INTRO_STAGES[ui.introStage];
+    overlayCard.innerHTML = `
+      <div class="stakers-overlay-kicker">LIQUID STAKERS</div>
+      <h1 class="stakers-overlay-title">${stage.title}</h1>
+      <p class="stakers-overlay-copy">${stage.body}</p>
+      <div class="stakers-overlay-hint">${stage.hint}</div>
+      <button class="stakers-button stakers-button--primary" type="button" data-action="next-intro">Continue</button>
+    `;
+    footerHint.textContent = "Arcade: A or Start continues. B goes back.";
+    return;
+  }
+
+  overlayCard.innerHTML = `
+    <div class="stakers-overlay-kicker">CHOOSE A DIFFICULTY</div>
+    <h1 class="stakers-overlay-title">Select Staking Mode</h1>
+    <div class="stakers-mode-grid">
+      ${MODES.map(
+        (mode, index) => `
+          <button class="stakers-mode-card ${ui.selectedMode === index ? "is-selected" : ""}" type="button" data-action="pick-mode" data-index="${index}">
+            <span class="stakers-mode-title">${mode.label}</span>
+            <span class="stakers-mode-copy">${mode.copy}</span>
+            <span class="stakers-mode-tag">${mode.badge}</span>
+          </button>
+        `
+      ).join("")}
+    </div>
+    <div class="stakers-overlay-hint">Stick left or right chooses. L selects Delegated. R selects stVaults. A or Start begins.</div>
+  `;
+  footerHint.textContent = "Arcade: stick picks difficulty. A fires in-round. Start opens menu.";
+}
+
+function showPauseMenu() {
+  state.screen = "pause";
+  state.pauseStartedAt = performance.now();
+  overlay.classList.remove("is-hidden");
+  overlayCard.innerHTML = `
+    <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
+    <h2 class="stakers-overlay-title">Game Menu</h2>
+    <div class="stakers-menu-list">
+      ${[
+        "Resume",
+        "Restart Round",
+        "Choose Difficulty",
+        "Back To Game Select",
+      ]
+        .map(
+          (label, index) => `
+            <button class="stakers-menu-item ${ui.pauseIndex === index ? "is-selected" : ""}" type="button" data-action="${
+              ["resume", "restart", "difficulty", "home"][index]
+            }">${label}</button>
+          `
+        )
+        .join("")}
+    </div>
+    <div class="stakers-overlay-hint">Stick up or down chooses. A or Start confirms. B resumes.</div>
+  `;
+}
+
+function showHelp() {
+  state.screen = "help";
+  state.pauseStartedAt = performance.now();
+  overlay.classList.remove("is-hidden");
+  overlayCard.innerHTML = `
+    <div class="stakers-overlay-kicker">HELP</div>
+    <h2 class="stakers-overlay-title">Controls</h2>
+    <p class="stakers-overlay-copy">Move with the stick or D-pad. Press A to fire. Press Start or Select for the menu. Delegated mode delays your inputs. stVaults does not.</p>
+    <button class="stakers-button stakers-button--primary" type="button" data-action="close-help">Return</button>
+  `;
+}
+
+function showGameOver() {
+  state.screen = "gameover";
+  state.roundEnded = true;
+  overlay.classList.remove("is-hidden");
+  overlayCard.innerHTML = `
+    <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
+    <h2 class="stakers-overlay-title">Round Complete</h2>
+    <div class="stakers-results-grid">
+      <div class="stakers-result-box"><span class="stakers-result-value">${state.score}</span><span class="stakers-result-label">Score</span></div>
+      <div class="stakers-result-box"><span class="stakers-result-value">${state.activeMode.shortLabel}</span><span class="stakers-result-label">Mode</span></div>
+    </div>
+    <p class="stakers-overlay-copy">${state.endReason}</p>
+    <div class="stakers-overlay-actions">
+      <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="restart">Start Again</button>
+      <button class="stakers-button stakers-button--ghost ${ui.endIndex === 1 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Difficulty</button>
+    </div>
+    <div class="stakers-overlay-hint">Stick left or right chooses. A or Start confirms. B returns to difficulty.</div>
+  `;
+}
+
+function startGame(mode) {
+  state.activeMode = mode;
+  state.screen = "playing";
+  state.gameStarted = true;
+  state.roundEnded = false;
+  state.roundStartedAt = 0;
+  state.elapsedMs = 0;
+  state.score = 0;
+  state.endReason = "";
+  state.baseLagMs = 0;
+  state.currentLagMs = 0;
+  state.inLagSpike = false;
+  state.nextLagSpikeAt = 0;
+  state.lagSpikeUntil = 0;
+  state.inputQueue.length = 0;
+  state.lastRawMove = 0;
+  state.appliedMove = 0;
+  state.lastFireAt = -BULLET_COOLDOWN_MS;
+  state.nextEnemyShotAt = 0;
+  state.effects.length = 0;
+  state.flashMessage = mode.badge;
+  state.flashAlpha = 1;
+  state.pauseStartedAt = 0;
+  state.player.x = GAME_WIDTH / 2;
+  ui.pauseIndex = 0;
+  ui.endIndex = 0;
+  buildEnemies();
+  overlay.classList.add("is-hidden");
+  footerHint.textContent = "Arcade: stick moves. A fires. Start or Select opens menu.";
+  audio.start();
+  updateHud(true);
+}
+
+function buildEnemies() {
+  state.enemies.length = 0;
+  const cols = ENEMY_ROWS[0].pattern.length;
+  const startX = GAME_WIDTH / 2 - ((cols - 1) * 52) / 2;
+  for (let row = 0; row < ENEMY_ROWS.length; row += 1) {
+    const spec = ENEMY_ROWS[row];
+    for (let col = 0; col < cols; col += 1) {
+      if (spec.pattern[col] !== "1") continue;
+      state.enemies.push({
+        x: startX + col * 52,
+        y: 110 + row * 42,
+        width: 28,
+        height: 36,
+        hp: spec.hp,
+        maxHp: spec.hp,
+        color: spec.color,
+      });
+    }
+  }
+  state.enemyDirection = 1;
+}
+
+function endRound(reason) {
+  if (state.roundEnded) return;
+  state.endReason = reason;
+  audio.fail();
+  showGameOver();
+  updateHud(true);
+}
+
+function resumeGame() {
+  if (state.pauseStartedAt && state.roundStartedAt) {
+    state.roundStartedAt += performance.now() - state.pauseStartedAt;
+  }
+  state.pauseStartedAt = 0;
+  state.screen = "playing";
+  overlay.classList.add("is-hidden");
+}
+
+function toggleHelp() {
+  if (state.screen === "help") {
+    closeHelp();
+  } else if (state.screen === "playing") {
+    showHelp();
+  }
+}
+
+function closeHelp() {
+  if (state.pauseStartedAt && state.roundStartedAt) {
+    state.roundStartedAt += performance.now() - state.pauseStartedAt;
+  }
+  state.pauseStartedAt = 0;
+  state.screen = "playing";
+  overlay.classList.add("is-hidden");
+}
+
+function resetToIntro(difficultyOnly = false) {
+  ui.introStage = difficultyOnly ? INTRO_STAGES.length : 0;
+  ui.selectedMode = state.activeMode.key === "stvaults" ? 1 : 0;
+  showIntro();
+  updateHud(true);
+}
+
+function activatePauseItem() {
+  if (ui.pauseIndex === 0) {
+    resumeGame();
+  } else if (ui.pauseIndex === 1) {
+    startGame(state.activeMode);
+  } else if (ui.pauseIndex === 2) {
+    resetToIntro(true);
+  } else {
+    window.location.href = HOME_URL;
+  }
+}
+
+function updateHud(force = false) {
+  const remaining = Math.max(0, ROUND_LENGTH_MS - state.elapsedMs);
+  const status =
+    state.screen === "playing"
+      ? state.inLagSpike
+        ? "Lag Spike"
+        : "Active"
+      : state.screen === "pause"
+        ? "Paused"
+        : state.screen === "gameover"
+          ? "Round Complete"
+          : "Standby";
+  const next = {
+    mode: state.activeMode.shortLabel,
+    score: String(state.score),
+    time: `${(remaining / 1000).toFixed(1)}s`,
+    lag: `${Math.round(state.currentLagMs)}ms`,
+    status,
+  };
+  if (force || next.mode !== state.hudCache.mode) hud.mode.textContent = next.mode;
+  if (force || next.score !== state.hudCache.score) hud.score.textContent = next.score;
+  if (force || next.time !== state.hudCache.time) hud.time.textContent = next.time;
+  if (force || next.lag !== state.hudCache.lag) hud.lag.textContent = next.lag;
+  if (force || next.status !== state.hudCache.status) hud.status.textContent = next.status;
+  state.hudCache = next;
+}
+
+function pollGamepad() {
+  const pad = (navigator.getGamepads?.() ?? []).find((gamepad) => gamepad?.connected);
+  if (!pad) {
+    input.horizontal = 0;
+    input.vertical = 0;
+    return;
+  }
+
+  const primaryPressed =
+    consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
+    consumePadEdge("primary2", !!pad.buttons[2]?.pressed);
+  const startPressed = consumePadEdge("start", !!pad.buttons[9]?.pressed);
+  const backPressed =
+    consumePadEdge("back", !!pad.buttons[1]?.pressed) ||
+    consumePadEdge("select", !!pad.buttons[8]?.pressed);
+  const leftPressed = consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
+  const rightPressed = consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
+
+  const horizontalDir =
+    axisDirection(pad.axes[0] ?? 0, "left", "right") ||
+    (!!pad.buttons[14]?.pressed ? "left" : null) ||
+    (!!pad.buttons[15]?.pressed ? "right" : null);
+  const verticalDir =
+    axisDirection(pad.axes[1] ?? 0, "up", "down") ||
+    (!!pad.buttons[12]?.pressed ? "up" : null) ||
+    (!!pad.buttons[13]?.pressed ? "down" : null);
+
+  const horizontalState = horizontalDir ? (horizontalDir === "left" ? -1 : 1) : 0;
+  const verticalState = verticalDir ? (verticalDir === "up" ? -1 : 1) : 0;
+  const horizontalEdge = horizontalState !== 0 && horizontalState !== input.horizontal;
+  const verticalEdge = verticalState !== 0 && verticalState !== input.vertical;
+  input.horizontal = horizontalState;
+  input.vertical = verticalState;
+
+  if (state.screen === "playing") {
+    if (primaryPressed) attemptFire(performance.now());
+    if (startPressed || backPressed) {
+      showPauseMenu();
+    }
+    return;
+  }
+
+  if (state.screen === "help") {
+    if (primaryPressed || startPressed || backPressed) {
+      closeHelp();
+    }
+    return;
+  }
+
+  if (state.screen === "pause") {
+    if (verticalEdge) {
+      ui.pauseIndex = (ui.pauseIndex + (verticalState > 0 ? 1 : 3)) % 4;
+      showPauseMenu();
+    }
+    if (primaryPressed || startPressed) activatePauseItem();
+    if (backPressed) resumeGame();
+    return;
+  }
+
+  if (state.screen === "gameover") {
+    if (leftPressed) {
+      ui.endIndex = 0;
+      showGameOver();
+    } else if (rightPressed) {
+      ui.endIndex = 1;
+      showGameOver();
+    } else if (horizontalEdge) {
+      ui.endIndex = horizontalState > 0 ? 1 : 0;
+      showGameOver();
+    }
+    if (primaryPressed || startPressed) {
+      if (ui.endIndex === 0) {
+        startGame(state.activeMode);
+      } else {
+        resetToIntro(true);
+      }
+    }
+    if (backPressed) {
+      resetToIntro(true);
+    }
+    return;
+  }
+
+  if (ui.introStage < INTRO_STAGES.length) {
+    if (primaryPressed || startPressed) {
+      ui.introStage += 1;
+      showIntro();
+    }
+    if (backPressed && ui.introStage > 0) {
+      ui.introStage -= 1;
+      showIntro();
+    }
+    return;
+  }
+
+  if (leftPressed) {
+    ui.selectedMode = 0;
+    showIntro();
+  } else if (rightPressed) {
+    ui.selectedMode = 1;
+    showIntro();
+  } else if (horizontalEdge) {
+    ui.selectedMode = horizontalState > 0 ? 1 : 0;
+    showIntro();
+  }
+
+  if (primaryPressed || startPressed) {
+    startGame(MODES[ui.selectedMode]);
+  }
+
+  if (backPressed) {
+    ui.introStage = INTRO_STAGES.length - 1;
+    showIntro();
+  }
+}
+
+function getRawMove() {
+  const keyboardMove = (input.keys.ArrowRight || input.keys.KeyD ? 1 : 0) - (input.keys.ArrowLeft || input.keys.KeyA ? 1 : 0);
+  return keyboardMove || input.horizontal;
+}
+
+function isFirePressed() {
+  return !!input.keys.Space;
+}
+
+function consumePadEdge(name, pressed) {
+  const wasPressed = !!input.gamepadButtons[name];
+  input.gamepadButtons[name] = pressed;
+  return pressed && !wasPressed;
+}
+
+function axisDirection(value, negative, positive) {
+  if (value <= -GAMEPAD_DEADZONE) return negative;
+  if (value >= GAMEPAD_DEADZONE) return positive;
+  return null;
+}
+
+function rectsOverlap(a, b) {
+  return (
+    a.x - a.width * 0.5 < b.x + b.width * 0.5 &&
+    a.x + a.width * 0.5 > b.x - b.width * 0.5 &&
+    a.y - a.height * 0.5 < b.y + b.height * 0.5 &&
+    a.y + a.height * 0.5 > b.y - b.height * 0.5
+  );
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function randomBetween(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function createRenderCache() {
+  return {
+    background: buildBackgroundCanvas(),
+    ethSprite: buildEthSprite(),
+    lidoSprite: buildLidoSprite(),
+  };
+}
+
+function buildBackgroundCanvas() {
+  const background = document.createElement("canvas");
+  background.width = GAME_WIDTH;
+  background.height = GAME_HEIGHT;
+  const backgroundCtx =
+    background.getContext("2d", { alpha: false }) || background.getContext("2d");
+
+  const gradient = backgroundCtx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+  gradient.addColorStop(0, "#0d1324");
+  gradient.addColorStop(1, "#050913");
+  backgroundCtx.fillStyle = gradient;
+  backgroundCtx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+  backgroundCtx.fillStyle = "rgba(17, 28, 52, 0.8)";
+  backgroundCtx.fillRect(0, 0, GAME_WIDTH, 220);
+  backgroundCtx.strokeStyle = "#293a57";
+  for (let index = 0; index < 6; index += 1) {
+    const y = 116 + index * 58;
+    backgroundCtx.beginPath();
+    backgroundCtx.moveTo(0, y);
+    backgroundCtx.lineTo(GAME_WIDTH, y);
+    backgroundCtx.stroke();
+  }
+
+  backgroundCtx.fillStyle = "rgba(7, 14, 26, 0.95)";
+  backgroundCtx.fillRect(0, 520, GAME_WIDTH, 80);
+  return background;
+}
+
+function buildEthSprite() {
+  const sprite = document.createElement("canvas");
+  sprite.width = 32;
+  sprite.height = 44;
+  const spriteCtx = sprite.getContext("2d");
+
+  spriteCtx.fillStyle = "#e6ebff";
+  drawDiamond(spriteCtx, 16, 12, 12, 10);
+  spriteCtx.fillStyle = "#b3c0ff";
+  drawDiamond(spriteCtx, 16, 31, 12, 11);
+  return sprite;
+}
+
+function buildLidoSprite() {
+  const sprite = document.createElement("canvas");
+  sprite.width = 32;
+  sprite.height = 44;
+  const spriteCtx = sprite.getContext("2d");
+  const blue = "#1a9be8";
+
+  spriteCtx.fillStyle = blue;
+  spriteCtx.beginPath();
+  spriteCtx.arc(16, 31, 13, 0, Math.PI * 2);
+  spriteCtx.fill();
+
+  spriteCtx.fillStyle = "#ffffff";
+  drawDiamond(spriteCtx, 16, 25, 8, 4);
+
+  spriteCtx.strokeStyle = blue;
+  spriteCtx.lineWidth = 4;
+  spriteCtx.beginPath();
+  spriteCtx.moveTo(16, 4);
+  spriteCtx.lineTo(26, 18);
+  spriteCtx.lineTo(16, 24);
+  spriteCtx.lineTo(6, 18);
+  spriteCtx.closePath();
+  spriteCtx.stroke();
+
+  spriteCtx.fillStyle = "#ffffff";
+  drawDiamond(spriteCtx, 16, 15, 6, 5);
+  return sprite;
+}
+
+function drawDiamond(context, x, y, halfWidth, halfHeight) {
+  context.beginPath();
+  context.moveTo(x, y - halfHeight);
+  context.lineTo(x + halfWidth, y);
+  context.lineTo(x, y + halfHeight);
+  context.lineTo(x - halfWidth, y);
+  context.closePath();
+  context.fill();
+}
+
+function createAudio() {
+  let audioContext = null;
+
+  function getContext() {
+    if (LOW_PERF_DEVICE) return null;
+    if (!audioContext) {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) return null;
+      audioContext = new AudioCtor();
+    }
+    if (audioContext.state === "suspended") {
+      audioContext.resume().catch(() => {});
+    }
+    return audioContext;
+  }
+
+  function tone(freq, duration, type, gainValue) {
+    const audioRef = getContext();
+    if (!audioRef) return;
+    const osc = audioRef.createOscillator();
+    const gain = audioRef.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(gainValue, audioRef.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioRef.currentTime + duration);
+    osc.connect(gain).connect(audioRef.destination);
+    osc.start();
+    osc.stop(audioRef.currentTime + duration);
+  }
+
+  return {
+    start: () => tone(280, 0.08, "triangle", 0.016),
+    shoot: () => tone(920, 0.08, "square", 0.012),
+    fail: () => tone(140, 0.2, "sawtooth", 0.018),
+  };
+}

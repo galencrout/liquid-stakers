@@ -1,5 +1,5 @@
 import "./eth-chomp.css";
-import lidoHeaderPng from "./assets/lido-header.png";
+import lidoHeaderPng from "./assets/optimized/lido-header.jpg";
 
 const app = document.querySelector("#app");
 

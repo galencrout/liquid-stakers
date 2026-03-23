@@ -208,7 +208,7 @@ function showDifficultyScreen() {
   state.phase = "select";
   state.running = false;
   showOverlay(
-    "Select Difficulty",
+    "Select Game Mode",
     [
       "L or move left: Regular Staking - queue delay before chomping ETH.",
       "R or move right: Liquid Staking (Lido) - chomp from the outset.",
@@ -229,7 +229,7 @@ function showEndScreen(kind) {
         `Final score: ${state.score.toFixed(1)}`,
         "Stake-Man cleared the maze.",
       ],
-      "Press A or B for difficulty. Start or Select opens menu.",
+      "Press A or B for game mode. Start or Select opens menu.",
       "success",
     );
   } else {
@@ -239,7 +239,7 @@ function showEndScreen(kind) {
         `Final score: ${state.score.toFixed(1)}`,
         "Try a new run with better pathing.",
       ],
-      "Press A or B for difficulty. Start or Select opens menu.",
+      "Press A or B for game mode. Start or Select opens menu.",
       "danger",
     );
   }
@@ -254,11 +254,11 @@ function openGameMenu() {
     ? [
         { label: "Resume", action: () => closeGameMenu() },
         { label: "Restart Round", action: () => startRound(state.mode ?? "regular") },
-        { label: "Choose Difficulty", action: () => showDifficultyScreen() },
+        { label: "Choose Game Mode", action: () => showDifficultyScreen() },
         { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
       ]
     : [
-        { label: "Choose Difficulty", action: () => showDifficultyScreen() },
+        { label: "Choose Game Mode", action: () => showDifficultyScreen() },
         { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
       ];
   state.menuIndex = 0;

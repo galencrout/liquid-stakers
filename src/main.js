@@ -15,6 +15,11 @@ const ENEMY_MOVE_SPEED = 38;
 const ENEMY_DROP = 18;
 const ENEMY_ZONE_Y = 500;
 const ENEMY_SHOT_INTERVAL_MS = 880;
+const START_SPEED_MULTIPLIER = 1.08;
+const START_SHOT_INTERVAL_MULTIPLIER = 0.95;
+const MAX_LEVEL = 20;
+const LEVEL_ENEMY_GROWTH = 0.1;
+const LEVEL_SPEED_GROWTH = 0.15;
 const GAMEPAD_DEADZONE = 0.45;
 const HOME_URL = "./index.html";
 
@@ -58,6 +63,10 @@ const ENEMY_ROWS = [
   { pattern: "11011110111", hp: 2, color: "#ff6b6b" },
   { pattern: "01100110010", hp: 1, color: "#65b9ff" },
 ];
+const BASE_ENEMY_COUNT = ENEMY_ROWS.reduce(
+  (total, row) => total + [...row.pattern].filter((cell) => cell === "1").length,
+  0
+);
 
 const INTRO_STAGES = [
   {
@@ -76,7 +85,7 @@ const INTRO_STAGES = [
     title: "Rules",
     body:
       "Survive sixty seconds and clear the queue pressure. Blue enemies take one shot, red take two, green take three. If they reach your validator zone, the round ends.",
-    hint: "Press A, Start, Space, or Enter to choose difficulty.",
+    hint: "Press A, Start, Space, or Enter to choose game mode.",
   },
 ];
 
@@ -92,6 +101,7 @@ app.innerHTML = `
         <canvas class="stakers-canvas" width="${GAME_WIDTH}" height="${GAME_HEIGHT}" aria-label="Liquid Stakers game"></canvas>
         <div class="stakers-hud">
           <div class="stakers-chip"><span class="stakers-chip-label">MODE</span><span class="stakers-chip-value" data-hud="mode">Delegated</span></div>
+          <div class="stakers-chip"><span class="stakers-chip-label">LEVEL</span><span class="stakers-chip-value" data-hud="level">1</span></div>
           <div class="stakers-chip"><span class="stakers-chip-label">SCORE</span><span class="stakers-chip-value" data-hud="score">0</span></div>
           <div class="stakers-chip"><span class="stakers-chip-label">TIME</span><span class="stakers-chip-value" data-hud="time">60.0s</span></div>
           <div class="stakers-chip"><span class="stakers-chip-label">LAG</span><span class="stakers-chip-value" data-hud="lag">0ms</span></div>
@@ -122,6 +132,7 @@ const footerHint = document.querySelector("[data-footer-hint]");
 
 const hud = {
   mode: document.querySelector('[data-hud="mode"]'),
+  level: document.querySelector('[data-hud="level"]'),
   score: document.querySelector('[data-hud="score"]'),
   time: document.querySelector('[data-hud="time"]'),
   lag: document.querySelector('[data-hud="lag"]'),
@@ -165,6 +176,9 @@ const state = {
   player: { x: GAME_WIDTH / 2, y: 548, width: 34, height: 44 },
   bullets: [],
   enemies: [],
+  level: 1,
+  enemyMoveSpeed: ENEMY_MOVE_SPEED,
+  enemyShotIntervalMs: ENEMY_SHOT_INTERVAL_MS,
   enemyDirection: 1,
   enemyOffsetY: 0,
   lastFireAt: -BULLET_COOLDOWN_MS,
@@ -175,7 +189,7 @@ const state = {
   flashMessage: "",
   flashAlpha: 0,
   pauseStartedAt: 0,
-  hudCache: { mode: "", score: "", time: "", lag: "", status: "" },
+  hudCache: { mode: "", level: "", score: "", time: "", lag: "", status: "" },
   nextHudRefreshAt: 0,
 };
 
@@ -215,12 +229,12 @@ window.addEventListener("keydown", (event) => {
       }
       return;
     }
-    if (event.code === "ArrowLeft" || event.code === "KeyA") {
+    if (event.code === "ArrowLeft" || event.code === "KeyA" || event.code === "Digit1") {
       ui.selectedMode = 0;
       showIntro();
       return;
     }
-    if (event.code === "ArrowRight" || event.code === "KeyD") {
+    if (event.code === "ArrowRight" || event.code === "KeyD" || event.code === "Digit2") {
       ui.selectedMode = 1;
       showIntro();
       return;
@@ -282,6 +296,12 @@ window.addEventListener("keydown", (event) => {
       }
     }
   }
+
+  if (state.screen === "gameover") {
+    if (event.code === "Enter" || event.code === "Space" || event.code === "Escape") {
+      resetToIntro(true);
+    }
+  }
 });
 
 window.addEventListener("keyup", (event) => {
@@ -337,7 +357,7 @@ function updateGame(now) {
 
   if (!state.roundStartedAt) {
     state.roundStartedAt = now;
-    state.nextEnemyShotAt = now + ENEMY_SHOT_INTERVAL_MS;
+    state.nextEnemyShotAt = now + state.enemyShotIntervalMs;
   }
 
   state.elapsedMs = now - state.roundStartedAt;
@@ -477,7 +497,7 @@ function updateEnemies(now) {
   let lowestY = 0;
 
   for (const enemy of state.enemies) {
-    enemy.x += state.enemyDirection * ENEMY_MOVE_SPEED / 60;
+    enemy.x += state.enemyDirection * state.enemyMoveSpeed / 60;
     minX = Math.min(minX, enemy.x - enemy.width * 0.5);
     maxX = Math.max(maxX, enemy.x + enemy.width * 0.5);
     lowestY = Math.max(lowestY, enemy.y + enemy.height * 0.5);
@@ -504,7 +524,7 @@ function updateEnemies(now) {
       y: shooter.y + 20,
       life: LOW_PERF_DEVICE ? 10 : 14,
     });
-    state.nextEnemyShotAt = now + ENEMY_SHOT_INTERVAL_MS;
+    state.nextEnemyShotAt = now + state.enemyShotIntervalMs;
   }
 }
 
@@ -546,7 +566,11 @@ function resolveCollisions() {
   state.bullets.length = bulletWrite;
 
   if (!state.enemies.length) {
-    endRound("You cleared all queue pressure before timeout.");
+    if (state.level >= MAX_LEVEL) {
+      endRound(`You cleared all ${MAX_LEVEL} levels before timeout.`);
+    } else {
+      advanceLevel();
+    }
   }
 }
 
@@ -670,7 +694,7 @@ function showIntro() {
   }
 
   overlayCard.innerHTML = `
-    <div class="stakers-overlay-kicker">CHOOSE A DIFFICULTY</div>
+    <div class="stakers-overlay-kicker">CHOOSE A GAME MODE</div>
     <h1 class="stakers-overlay-title">Select Staking Mode</h1>
     <div class="stakers-mode-grid">
       ${MODES.map(
@@ -683,9 +707,9 @@ function showIntro() {
         `
       ).join("")}
     </div>
-    <div class="stakers-overlay-hint">Stick left or right chooses. L selects Delegated. R selects stVaults. A or Start begins.</div>
+    <div class="stakers-overlay-hint">Press 1 for Delegated. Press 2 for stVaults. A or Start begins.</div>
   `;
-  footerHint.textContent = "Arcade: stick picks difficulty. A fires in-round. Start opens menu.";
+  footerHint.textContent = "Arcade: 1 picks Delegated. 2 picks stVaults. A fires in-round. Start opens menu.";
 }
 
 function showPauseMenu() {
@@ -699,7 +723,7 @@ function showPauseMenu() {
       ${[
         "Resume",
         "Restart Round",
-        "Choose Difficulty",
+        "Choose Game Mode",
         "Back To Game Select",
       ]
         .map(
@@ -722,7 +746,7 @@ function showHelp() {
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">HELP</div>
     <h2 class="stakers-overlay-title">Controls</h2>
-    <p class="stakers-overlay-copy">Move with the stick or D-pad. Press A to fire. Press Start or Select for the menu. Delegated mode delays your inputs. stVaults does not.</p>
+    <p class="stakers-overlay-copy">Move with the stick or D-pad. Press A to fire. Press Start or Select for the menu. Game mode is chosen before each round. Delegated mode delays your inputs. stVaults does not.</p>
     <button class="stakers-button stakers-button--primary" type="button" data-action="close-help">Return</button>
   `;
 }
@@ -736,14 +760,15 @@ function showGameOver() {
     <h2 class="stakers-overlay-title">Round Complete</h2>
     <div class="stakers-results-grid">
       <div class="stakers-result-box"><span class="stakers-result-value">${state.score}</span><span class="stakers-result-label">Score</span></div>
+      <div class="stakers-result-box"><span class="stakers-result-value">${state.level}</span><span class="stakers-result-label">Level</span></div>
       <div class="stakers-result-box"><span class="stakers-result-value">${state.activeMode.shortLabel}</span><span class="stakers-result-label">Mode</span></div>
     </div>
     <p class="stakers-overlay-copy">${state.endReason}</p>
     <div class="stakers-overlay-actions">
-      <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="restart">Start Again</button>
-      <button class="stakers-button stakers-button--ghost ${ui.endIndex === 1 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Difficulty</button>
+      <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Game Mode</button>
+      <button class="stakers-button stakers-button--ghost ${ui.endIndex === 1 ? "is-selected" : ""}" type="button" data-action="home">Back To Game Select</button>
     </div>
-    <div class="stakers-overlay-hint">Stick left or right chooses. A or Start confirms. B returns to difficulty.</div>
+    <div class="stakers-overlay-hint">A or Start returns to game mode select. B also returns to game mode select.</div>
   `;
 }
 
@@ -762,6 +787,10 @@ function startGame(mode) {
   state.nextLagSpikeAt = 0;
   state.lagSpikeUntil = 0;
   state.inputQueue.length = 0;
+  state.bullets.length = 0;
+  state.level = 1;
+  state.enemyMoveSpeed = getEnemyMoveSpeed(state.level);
+  state.enemyShotIntervalMs = getEnemyShotInterval(state.level);
   state.lastRawMove = 0;
   state.appliedMove = 0;
   state.lastFireAt = -BULLET_COOLDOWN_MS;
@@ -782,15 +811,15 @@ function startGame(mode) {
 
 function buildEnemies() {
   state.enemies.length = 0;
-  const cols = ENEMY_ROWS[0].pattern.length;
-  const startX = GAME_WIDTH / 2 - ((cols - 1) * 52) / 2;
-  for (let row = 0; row < ENEMY_ROWS.length; row += 1) {
-    const spec = ENEMY_ROWS[row];
-    for (let col = 0; col < cols; col += 1) {
-      if (spec.pattern[col] !== "1") continue;
+  const config = getLevelFormation(state.level);
+  const startX = GAME_WIDTH / 2 - ((config.cols - 1) * config.colSpacing) / 2;
+  for (let row = 0; row < config.rows; row += 1) {
+    const spec = getEnemySpecForRow(row, config.rows);
+    const chosenCols = getFormationColumns(config.cols, config.rowCounts[row], spec.pattern, row);
+    for (const col of chosenCols) {
       state.enemies.push({
-        x: startX + col * 52,
-        y: 110 + row * 42,
+        x: startX + col * config.colSpacing,
+        y: config.startY + row * config.rowSpacing,
         width: 28,
         height: 36,
         hp: spec.hp,
@@ -800,6 +829,21 @@ function buildEnemies() {
     }
   }
   state.enemyDirection = 1;
+  state.nextEnemyShotAt = 0;
+}
+
+function advanceLevel() {
+  state.level += 1;
+  state.enemyMoveSpeed = getEnemyMoveSpeed(state.level);
+  state.enemyShotIntervalMs = getEnemyShotInterval(state.level);
+  state.inputQueue.length = 0;
+  state.bullets.length = 0;
+  state.appliedMove = 0;
+  state.lastRawMove = 0;
+  state.flashMessage = `Level ${state.level} queue pressure rising`;
+  state.flashAlpha = 1;
+  buildEnemies();
+  updateHud(true);
 }
 
 function endRound(reason) {
@@ -869,12 +913,14 @@ function updateHud(force = false) {
           : "Standby";
   const next = {
     mode: state.activeMode.shortLabel,
+    level: String(state.level),
     score: String(state.score),
     time: `${(remaining / 1000).toFixed(1)}s`,
     lag: `${Math.round(state.currentLagMs)}ms`,
     status,
   };
   if (force || next.mode !== state.hudCache.mode) hud.mode.textContent = next.mode;
+  if (force || next.level !== state.hudCache.level) hud.level.textContent = next.level;
   if (force || next.score !== state.hudCache.score) hud.score.textContent = next.score;
   if (force || next.time !== state.hudCache.time) hud.time.textContent = next.time;
   if (force || next.lag !== state.hudCache.lag) hud.lag.textContent = next.lag;
@@ -954,9 +1000,9 @@ function pollGamepad() {
     }
     if (primaryPressed || startPressed) {
       if (ui.endIndex === 0) {
-        startGame(state.activeMode);
-      } else {
         resetToIntro(true);
+      } else {
+        window.location.href = HOME_URL;
       }
     }
     if (backPressed) {
@@ -1034,6 +1080,113 @@ function clamp(value, min, max) {
 
 function randomBetween(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function getEnemyMoveSpeed(level) {
+  return ENEMY_MOVE_SPEED * START_SPEED_MULTIPLIER * Math.pow(1 + LEVEL_SPEED_GROWTH, level - 1);
+}
+
+function getEnemyShotInterval(level) {
+  return Math.max(
+    360,
+    ENEMY_SHOT_INTERVAL_MS * START_SHOT_INTERVAL_MULTIPLIER * Math.pow(0.97, level - 1)
+  );
+}
+
+function getLevelFormation(level) {
+  const enemyTarget = Math.ceil(BASE_ENEMY_COUNT * Math.pow(1 + LEVEL_ENEMY_GROWTH, level - 1));
+  const cols = Math.min(19, 11 + Math.floor((level - 1) / 2));
+  const rows = Math.max(ENEMY_ROWS.length, Math.ceil(enemyTarget / (cols * 0.82)));
+  const rowSpacing = rows >= 14 ? 22 : rows >= 11 ? 26 : rows >= 8 ? 31 : 36;
+  const colSpacing = cols >= 18 ? 36 : cols >= 15 ? 39 : cols >= 13 ? 42 : 46;
+  const startY = rows >= 14 ? 64 : rows >= 11 ? 74 : 92;
+
+  return {
+    cols,
+    rows,
+    startY,
+    rowSpacing,
+    colSpacing,
+    rowCounts: distributeEnemiesAcrossRows(enemyTarget, rows, cols),
+  };
+}
+
+function distributeEnemiesAcrossRows(total, rows, cols) {
+  const counts = new Array(rows).fill(0);
+  const weights = [];
+  let weightSum = 0;
+
+  for (let row = 0; row < rows; row += 1) {
+    const ratio = rows === 1 ? 0.5 : row / (rows - 1);
+    const weight = 0.8 + 0.35 * Math.sin(ratio * Math.PI);
+    weights.push(weight);
+    weightSum += weight;
+  }
+
+  let assigned = 0;
+  for (let row = 0; row < rows; row += 1) {
+    const count = Math.min(cols, Math.max(1, Math.floor((total * weights[row]) / weightSum)));
+    counts[row] = count;
+    assigned += count;
+  }
+
+  let delta = total - assigned;
+  while (delta > 0) {
+    let changed = false;
+    for (let row = 0; row < rows && delta > 0; row += 1) {
+      if (counts[row] >= cols) continue;
+      counts[row] += 1;
+      delta -= 1;
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  while (delta < 0) {
+    let changed = false;
+    for (let row = rows - 1; row >= 0 && delta < 0; row -= 1) {
+      if (counts[row] <= 1) continue;
+      counts[row] -= 1;
+      delta += 1;
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  return counts;
+}
+
+function getEnemySpecForRow(row, totalRows) {
+  const ratio = totalRows === 1 ? 0 : row / (totalRows - 1);
+  if (ratio <= 0.34) return ENEMY_ROWS[0];
+  if (ratio <= 0.68) return ENEMY_ROWS[2];
+  return ENEMY_ROWS[4];
+}
+
+function getFormationColumns(cols, count, pattern, row) {
+  const preferred = [];
+  const fallback = [];
+  const center = (cols - 1) / 2;
+
+  for (let col = 0; col < cols; col += 1) {
+    const sample = pattern[(col + row) % pattern.length];
+    if (sample === "1") {
+      preferred.push(col);
+    } else {
+      fallback.push(col);
+    }
+  }
+
+  const centerOut = (a, b) => {
+    const aDistance = Math.abs(a - center);
+    const bDistance = Math.abs(b - center);
+    if (aDistance !== bDistance) return aDistance - bDistance;
+    return a - b;
+  };
+
+  preferred.sort(centerOut);
+  fallback.sort(centerOut);
+  return preferred.concat(fallback).slice(0, count);
 }
 
 function createRenderCache() {

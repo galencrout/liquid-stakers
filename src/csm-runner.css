@@ -136,6 +136,28 @@ body,
   pointer-events: none;
 }
 
+.event-banner {
+  position: absolute;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: rgba(7, 13, 18, 0.92);
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.event-banner.is-visible {
+  opacity: 1;
+}
+
 .phase-banner.is-visible {
   opacity: 1;
 }

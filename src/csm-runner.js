@@ -245,6 +245,8 @@ overlay.addEventListener("pointerdown", (event) => {
 async function startSelectedMode(modeKey) {
   game.activeMode = modeKey;
   game.screen = "loading";
+  game.accumulator = 0;
+  game.lastFrameAt = performance.now();
   overlay.classList.add("is-hidden");
 
   const module = modeKey === "vanilla"
@@ -287,13 +289,17 @@ function frame(timestamp) {
   const last = game.lastFrameAt || timestamp;
   const delta = Math.min(100, timestamp - last);
   game.lastFrameAt = timestamp;
-  game.accumulator += delta;
 
   pollGamepad();
 
-  while (game.screen === "playing" && game.accumulator >= STEP_MS) {
-    update(STEP_MS / 1000);
-    game.accumulator -= STEP_MS;
+  if (game.screen === "playing") {
+    game.accumulator += delta;
+    while (game.accumulator >= STEP_MS) {
+      update(STEP_MS / 1000);
+      game.accumulator -= STEP_MS;
+    }
+  } else {
+    game.accumulator = 0;
   }
 
   render();
@@ -346,6 +352,7 @@ function handleCleared(isProposal) {
 function failGame() {
   if (game.screen !== "playing") return;
   game.screen = "gameover";
+  game.accumulator = 0;
   audio.fail();
   showGameOver();
 }
@@ -372,6 +379,7 @@ function hideEventBanner() {
 function showTitleScreen() {
   game.screen = "title";
   game.pendingLeaderboardEntry = false;
+  game.accumulator = 0;
   showTitle();
   updateHud();
 }

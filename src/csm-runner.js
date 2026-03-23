@@ -13,6 +13,7 @@ const GAMEPAD_DEADZONE = 0.45;
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const EFFECTS_ENABLED = !LOW_PERF_DEVICE && !REDUCED_MOTION;
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
+const HOME_URL = "./index.html";
 const PROPOSAL_ART = [
   "██████  ██       ██████   ██████ ██   ██",
   "██   ██ ██      ██    ██ ██      ██  ██ ",
@@ -225,6 +226,8 @@ const overlayState = {
   selectedIndex: 0,
 };
 
+const pauseMenuActions = ["resume", "restart", "mode-select", "game-selector"];
+
 showTitle();
 updateHud();
 requestAnimationFrame(frame);
@@ -258,17 +261,73 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
   }
 
-  if (event.code === "Enter" && game.screen !== "playing") {
-    startSelectedMode(game.activeMode);
+  if (game.screen === "playing" && (event.code === "Enter" || event.code === "Escape")) {
+    showPauseMenu();
     return;
   }
 
-  if (event.code === "Space" || event.code === "ArrowUp") {
-    if (game.screen !== "playing") {
-      startSelectedMode(game.activeMode);
+  if (overlayState.view === "menu") {
+    if (event.code === "ArrowUp" || event.code === "ArrowLeft") {
+      overlayState.selectedIndex = (overlayState.selectedIndex + pauseMenuActions.length - 1) % pauseMenuActions.length;
+      showPauseMenu();
       return;
     }
-    primaryAction();
+    if (event.code === "ArrowDown" || event.code === "ArrowRight") {
+      overlayState.selectedIndex = (overlayState.selectedIndex + 1) % pauseMenuActions.length;
+      showPauseMenu();
+      return;
+    }
+    if (event.code === "Enter" || event.code === "Space") {
+      activatePauseMenuAction();
+      return;
+    }
+    if (event.code === "Escape") {
+      hideOverlay();
+      game.screen = "playing";
+      overlayState.view = "playing";
+      return;
+    }
+  }
+
+  if (overlayState.view === "entry") {
+    if (event.code === "Space") {
+      saveLeaderboardInitials();
+      return;
+    }
+  }
+
+  if (overlayState.view === "title") {
+    if (event.code === "ArrowLeft") {
+      overlayState.selectedIndex = (overlayState.selectedIndex + 2) % 3;
+      showTitle();
+      return;
+    }
+    if (event.code === "ArrowRight") {
+      overlayState.selectedIndex = (overlayState.selectedIndex + 1) % 3;
+      showTitle();
+      return;
+    }
+    if (event.code === "Enter" || event.code === "Space") {
+      activateTitleAction();
+      return;
+    }
+  }
+
+  if (overlayState.view === "gameover") {
+    if (event.code === "ArrowLeft") {
+      overlayState.selectedIndex = (overlayState.selectedIndex + 2) % 3;
+      showGameOver();
+      return;
+    }
+    if (event.code === "ArrowRight") {
+      overlayState.selectedIndex = (overlayState.selectedIndex + 1) % 3;
+      showGameOver();
+      return;
+    }
+    if (event.code === "Enter" || event.code === "Space") {
+      activateGameOverAction();
+      return;
+    }
   }
 });
 
@@ -296,6 +355,18 @@ overlay.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  if (actionName === "game-selector") {
+    window.location.href = HOME_URL;
+    return;
+  }
+
+  if (actionName === "resume") {
+    hideOverlay();
+    game.screen = "playing";
+    overlayState.view = "playing";
+    return;
+  }
+
   if (actionName === "skip-score") {
     game.pendingLeaderboardEntry = false;
     showGameOver();
@@ -308,6 +379,7 @@ overlay.addEventListener("pointerdown", (event) => {
   }
 
   if (mode && MODES[mode]) {
+    overlayState.selectedIndex = mode === "vanilla" ? 0 : 1;
     startSelectedMode(mode);
     return;
   }
@@ -342,8 +414,8 @@ function pollGamepad() {
 
   const primaryPressed =
     consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
-    consumePadEdge("primary2", !!pad.buttons[2]?.pressed) ||
-    consumePadEdge("start", !!pad.buttons[9]?.pressed);
+    consumePadEdge("primary2", !!pad.buttons[2]?.pressed);
+  const startPressed = consumePadEdge("start", !!pad.buttons[9]?.pressed);
   const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed) || consumePadEdge("select", !!pad.buttons[8]?.pressed);
   const leftPressed = consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
   const rightPressed = consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
@@ -368,6 +440,9 @@ function pollGamepad() {
     if (primaryPressed) {
       primaryAction();
     }
+    if (startPressed || backPressed) {
+      showPauseMenu();
+    }
     return;
   }
 
@@ -382,23 +457,39 @@ function pollGamepad() {
     return;
   }
 
+  if (overlayState.view === "menu") {
+    if (horizontalEdge || verticalEdge || leftPressed || rightPressed) {
+      const direction = verticalEdge ? verticalState : horizontalEdge ? horizontalState : leftPressed ? -1 : 1;
+      overlayState.selectedIndex = (overlayState.selectedIndex + direction + pauseMenuActions.length) % pauseMenuActions.length;
+      showPauseMenu();
+    }
+    if (primaryPressed || startPressed) {
+      activatePauseMenuAction();
+    }
+    if (backPressed) {
+      hideOverlay();
+      game.screen = "playing";
+      overlayState.view = "playing";
+    }
+    return;
+  }
+
   if (overlayState.view === "title") {
     if (leftPressed) {
       overlayState.selectedIndex = 0;
       showTitle();
     } else if (rightPressed) {
-      overlayState.selectedIndex = 1;
+      overlayState.selectedIndex = Math.min(2, overlayState.selectedIndex + 1);
       showTitle();
     } else if (horizontalEdge) {
-      overlayState.selectedIndex = (overlayState.selectedIndex + horizontalState + 2) % 2;
+      overlayState.selectedIndex = (overlayState.selectedIndex + horizontalState + 3) % 3;
       showTitle();
     }
-    if (primaryPressed) {
-      startSelectedMode(overlayState.selectedIndex === 0 ? "vanilla" : "csm");
+    if (primaryPressed || startPressed) {
+      activateTitleAction();
     }
     if (backPressed) {
-      overlayState.selectedIndex = 0;
-      showTitle();
+      window.location.href = HOME_URL;
     }
     return;
   }
@@ -408,21 +499,14 @@ function pollGamepad() {
       overlayState.selectedIndex = 0;
       showGameOver();
     } else if (rightPressed) {
-      overlayState.selectedIndex = 1;
+      overlayState.selectedIndex = Math.min(2, overlayState.selectedIndex + 1);
       showGameOver();
     } else if (horizontalEdge) {
-      overlayState.selectedIndex = (overlayState.selectedIndex + horizontalState + 2) % 2;
+      overlayState.selectedIndex = (overlayState.selectedIndex + horizontalState + 3) % 3;
       showGameOver();
     }
-    if (primaryPressed) {
-      if (overlayState.selectedIndex === 0) {
-        startSelectedMode(game.activeMode);
-      } else {
-        game.screen = "title";
-        game.pendingLeaderboardEntry = false;
-        showTitle();
-        updateHud();
-      }
+    if (primaryPressed || startPressed) {
+      activateGameOverAction();
     }
     if (backPressed) {
       game.screen = "title";
@@ -645,6 +729,9 @@ function showTitle() {
         ${renderLeaderboard("csm")}
       </button>
     </div>
+    <div class="overlay-actions-row">
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Game Selector</button>
+    </div>
     <div class="overlay-menu-hint">Stick or D-pad chooses. L selects Vanilla. R selects CSM. A or Start confirms.</div>
   `;
 }
@@ -665,7 +752,7 @@ function showGameOver() {
   }
 
   overlayState.view = "gameover";
-  overlayState.selectedIndex = Math.min(overlayState.selectedIndex, 1);
+  overlayState.selectedIndex = Math.min(overlayState.selectedIndex, 2);
   overlayCard.innerHTML = `
     <div class="overlay-kicker">${getModeConfig().label}</div>
     <h2 class="overlay-title">Restart</h2>
@@ -674,9 +761,79 @@ function showGameOver() {
     <div class="overlay-actions-row">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
       <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Mode Select</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Game Selector</button>
     </div>
     <div class="overlay-menu-hint">Stick or D-pad chooses. A or Start confirms. B returns to mode select.</div>
   `;
+}
+
+function activateTitleAction() {
+  if (overlayState.selectedIndex === 0) {
+    startSelectedMode("vanilla");
+    return;
+  }
+  if (overlayState.selectedIndex === 1) {
+    startSelectedMode("csm");
+    return;
+  }
+  window.location.href = HOME_URL;
+}
+
+function activateGameOverAction() {
+  if (overlayState.selectedIndex === 0) {
+    startSelectedMode(game.activeMode);
+    return;
+  }
+  if (overlayState.selectedIndex === 1) {
+    game.screen = "title";
+    game.pendingLeaderboardEntry = false;
+    showTitle();
+    updateHud();
+    return;
+  }
+  window.location.href = HOME_URL;
+}
+
+function showPauseMenu() {
+  overlayState.view = "menu";
+  overlayState.selectedIndex = Math.min(overlayState.selectedIndex, pauseMenuActions.length - 1);
+  game.screen = "paused";
+  showOverlay();
+  overlayCard.innerHTML = `
+    <div class="overlay-kicker">${getModeConfig().label}</div>
+    <h2 class="overlay-title">Operations Menu</h2>
+    <div class="overlay-actions-stack">
+      <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="resume">Resume</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Restart</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Mode Select</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Game Selector</button>
+    </div>
+    <div class="overlay-menu-hint">Joystick or D-pad navigates. A or Start confirms. B or Select resumes.</div>
+  `;
+}
+
+function activatePauseMenuAction() {
+  const actionName = pauseMenuActions[overlayState.selectedIndex];
+  if (actionName === "resume") {
+    hideOverlay();
+    game.screen = "playing";
+    overlayState.view = "playing";
+    return;
+  }
+  if (actionName === "restart") {
+    startSelectedMode(game.activeMode);
+    return;
+  }
+  if (actionName === "mode-select") {
+    game.screen = "title";
+    game.pendingLeaderboardEntry = false;
+    showTitle();
+    updateHud();
+    return;
+  }
+  if (actionName === "game-selector") {
+    window.location.href = HOME_URL;
+  }
 }
 
 function renderLeaderboardPicker() {

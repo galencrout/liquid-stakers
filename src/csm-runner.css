@@ -354,6 +354,12 @@ body,
   flex-wrap: wrap;
 }
 
+.overlay-actions-stack {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
 .overlay-button {
   margin-top: 18px;
   appearance: none;
@@ -365,6 +371,11 @@ body,
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.overlay-actions-stack .overlay-button {
+  margin-top: 0;
+  min-width: 220px;
 }
 
 .overlay-button.is-selected {

@@ -154,7 +154,7 @@
       }
 
       function launchSelected() {
-        window.location.href = cards[selectedIndex].href;
+        window.location.assign(cards[selectedIndex].href);
       }
 
       function pollPad() {
@@ -174,7 +174,8 @@
         const rightPressed = consumeButtonEdge("right", !!pad.buttons[15]?.pressed);
         const confirmPressed =
           consumeButtonEdge("a", !!pad.buttons[0]?.pressed) ||
-          consumeButtonEdge("start", !!pad.buttons[9]?.pressed);
+          consumeButtonEdge("start", !!pad.buttons[9]?.pressed) ||
+          consumeButtonEdge("menu", !!pad.buttons[8]?.pressed);
 
         if (leftPressed) selectCard(selectedIndex - 1);
         if (rightPressed) selectCard(selectedIndex + 1);

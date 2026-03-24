@@ -31,6 +31,7 @@ const PROPOSAL_ART = [
 ];
 const PROPOSAL_FLASH_DURATION = 1.0;
 const HARDFORK_FLASH_DURATION = 1.0;
+const INPUT_COOLDOWN_MS = 350;
 const PROPOSAL_FLASH_ALPHA = 0.46;
 const PROPOSAL_FLASH_TRAVEL = 500;
 const HARDFORK_FLASH_ALPHA = 0.34;
@@ -214,6 +215,7 @@ const game = {
   },
   particles: [],
   hudState: { mode: "", bond: "", apr: "", fork: "", slot: "", highScore: "" },
+  inputCooldownUntil: performance.now() + INPUT_COOLDOWN_MS,
 };
 
 const renderCache = createRenderCache();
@@ -345,6 +347,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 canvas.addEventListener("pointerdown", () => {
+  if (isInputCoolingDown()) return;
   if (game.screen !== "playing") {
     startSelectedMode(game.activeMode);
     return;
@@ -418,6 +421,22 @@ function axisDirection(value, negative, positive) {
 }
 
 function pollGamepad() {
+  if (isInputCoolingDown()) {
+    const pad = getPrimaryGamepad();
+    if (pad) {
+      consumePadEdge("primary0", !!pad.buttons[0]?.pressed);
+      consumePadEdge("primary2", !!pad.buttons[2]?.pressed);
+      consumePadEdge("start", !!pad.buttons[9]?.pressed);
+      consumePadEdge("back", !!pad.buttons[1]?.pressed);
+      consumePadEdge("select", !!pad.buttons[8]?.pressed);
+      consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
+      consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
+      game.gamepadAxis.horizontal = 0;
+      game.gamepadAxis.vertical = 0;
+    }
+    return;
+  }
+
   const pad = getPrimaryGamepad();
   if (!pad) {
     game.gamepadAxis.horizontal = 0;
@@ -651,6 +670,7 @@ function renderLeaderboard(mode) {
 function startSelectedMode(mode) {
   game.activeMode = mode;
   game.screen = "playing";
+  armInputCooldown();
   game.phaseIndex = 0;
   game.slotsCleared = 0;
   game.nextProposalAt = 10 + ((Math.random() * 6) | 0);
@@ -721,6 +741,7 @@ function primaryAction() {
 
 function showTitle() {
   overlayState.view = "title";
+  armInputCooldown();
   showOverlay();
   overlayCard.innerHTML = `
     <h1 class="overlay-title">Choose Game Mode</h1>
@@ -750,6 +771,7 @@ function showTitle() {
 }
 
 function showGameOver() {
+  armInputCooldown();
   showOverlay();
   if (game.pendingLeaderboardEntry) {
     overlayState.view = "entry";
@@ -815,6 +837,7 @@ function showPauseMenu() {
   overlayState.view = "menu";
   overlayState.selectedIndex = Math.min(overlayState.selectedIndex, pauseMenuActions.length - 1);
   game.screen = "paused";
+  armInputCooldown();
   showOverlay();
   overlayCard.innerHTML = `
     <div class="overlay-kicker">${getModeConfig().label}</div>
@@ -851,6 +874,14 @@ function activatePauseMenuAction() {
   if (actionName === "game-selector") {
     window.location.href = HOME_URL;
   }
+}
+
+function armInputCooldown() {
+  game.inputCooldownUntil = performance.now() + INPUT_COOLDOWN_MS;
+}
+
+function isInputCoolingDown() {
+  return performance.now() < game.inputCooldownUntil;
 }
 
 function renderLeaderboardPicker() {

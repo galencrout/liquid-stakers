@@ -1229,28 +1229,12 @@ function drawFlappyPlayer(phase) {
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.rotate(player.tilt);
-  ctx.fillStyle = "#0f1820";
-  roundRect(ctx, -FLAPPY.playerWidth * 0.5, -FLAPPY.playerHeight * 0.36, FLAPPY.playerWidth, FLAPPY.playerHeight * 0.72, 18);
-  ctx.fill();
-  ctx.fillStyle = "#f4f7fa";
-  roundRect(ctx, -FLAPPY.playerWidth * 0.5, -FLAPPY.playerHeight * 0.5, FLAPPY.playerWidth, FLAPPY.playerHeight * 0.28, 14);
-  ctx.fill();
-  ctx.fillStyle = "#7dd8ae";
-  roundRect(ctx, -FLAPPY.playerWidth * 0.3, -4, 16, 10, 4);
-  ctx.fill();
-  ctx.fillStyle = "#2f3d48";
-  roundRect(ctx, -6, -6, 22, 12, 4);
-  ctx.fill();
-  roundRect(ctx, 28, -6, 16, 12, 4);
-  ctx.fill();
-  ctx.strokeStyle = phase.accent;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-FLAPPY.playerWidth * 0.58, 0);
-  ctx.lineTo(-FLAPPY.playerWidth * 0.72, -12);
-  ctx.lineTo(-FLAPPY.playerWidth * 0.72, 12);
-  ctx.closePath();
-  ctx.stroke();
+  drawValidatorUnit(ctx, phase, {
+    width: FLAPPY.playerWidth,
+    height: FLAPPY.playerHeight,
+    cableLift: 6,
+    detailScale: 1,
+  });
   ctx.restore();
 }
 
@@ -1288,20 +1272,12 @@ function drawRunnerPlayer(phase) {
   ctx.save();
   ctx.translate(player.x, player.y - RUNNER.playerHeight * 0.5);
   ctx.rotate(player.tilt);
-  ctx.fillStyle = "#0f1820";
-  roundRect(ctx, -RUNNER.playerWidth * 0.5, 12, RUNNER.playerWidth, RUNNER.playerHeight - 12, 16);
-  ctx.fill();
-  ctx.fillStyle = "#f4f7fa";
-  roundRect(ctx, -RUNNER.playerWidth * 0.5, 0, RUNNER.playerWidth, RUNNER.playerHeight * 0.3, 14);
-  ctx.fill();
-  ctx.fillStyle = "#7dd8ae";
-  roundRect(ctx, -RUNNER.playerWidth * 0.32, 38, 16, 10, 4);
-  ctx.fill();
-  ctx.fillStyle = "#2f3d48";
-  roundRect(ctx, -6, 36, 22, 12, 4);
-  ctx.fill();
-  roundRect(ctx, 28, 36, 16, 12, 4);
-  ctx.fill();
+  drawValidatorUnit(ctx, phase, {
+    width: RUNNER.playerWidth,
+    height: RUNNER.playerHeight,
+    cableLift: 10,
+    detailScale: 1.06,
+  });
   ctx.restore();
 }
 
@@ -1325,6 +1301,113 @@ function roundRect(context, x, y, width, height, radius) {
   context.arcTo(x, y + height, x, y, radius);
   context.arcTo(x, y, x + width, y, radius);
   context.closePath();
+}
+
+function drawValidatorUnit(context, phase, config) {
+  const { width, height, cableLift, detailScale } = config;
+  const bodyHeight = height * 0.48;
+  const topHeight = height * 0.34;
+  const frontY = height * 0.08;
+  const left = -width * 0.5;
+  const topLeftX = left + width * 0.1;
+  const topRightX = left + width * 0.82;
+  const lidTopY = -height * 0.42;
+  const lidBottomY = lidTopY + topHeight;
+  const frontBottomY = frontY + bodyHeight;
+
+  context.lineWidth = 2;
+  context.strokeStyle = "rgba(12, 17, 24, 0.75)";
+
+  context.beginPath();
+  context.moveTo(topLeftX, lidTopY);
+  context.lineTo(topRightX, lidTopY);
+  context.lineTo(left + width * 0.54, lidBottomY);
+  context.lineTo(left - width * 0.18, lidBottomY);
+  context.closePath();
+  context.fillStyle = "#f3f6fa";
+  context.fill();
+  context.stroke();
+
+  context.beginPath();
+  context.moveTo(left - width * 0.18, lidBottomY);
+  context.lineTo(left + width * 0.54, lidBottomY);
+  context.lineTo(left + width * 0.54, frontY);
+  context.lineTo(left - width * 0.18, frontY);
+  context.closePath();
+  context.fillStyle = "#1d2432";
+  context.fill();
+  context.stroke();
+
+  context.beginPath();
+  context.moveTo(left + width * 0.54, lidBottomY);
+  context.lineTo(topRightX, lidTopY);
+  context.lineTo(topRightX, frontY - topHeight * 0.12);
+  context.lineTo(left + width * 0.54, frontY);
+  context.closePath();
+  context.fillStyle = "#242c3b";
+  context.fill();
+  context.stroke();
+
+  context.strokeStyle = "rgba(255, 255, 255, 0.45)";
+  context.beginPath();
+  context.moveTo(topLeftX + 4, lidBottomY - 2);
+  context.lineTo(left + width * 0.5, lidBottomY - 2);
+  context.stroke();
+
+  context.fillStyle = "#10151d";
+  for (let row = 0; row < 4; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      context.beginPath();
+      context.arc(left - width * 0.04 + col * 7 * detailScale, frontY + 10 + row * 7 * detailScale, 1.8 * detailScale, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+
+  context.fillStyle = "#f8fbff";
+  context.fillRect(left + width * 0.2, frontY + 18 * detailScale, 16 * detailScale, 14 * detailScale);
+  context.fillRect(left + width * 0.42, frontY + 18 * detailScale, 16 * detailScale, 14 * detailScale);
+  context.fillStyle = "#141b23";
+  context.fillRect(left + width * 0.23, frontY + 21 * detailScale, 10 * detailScale, 8 * detailScale);
+  context.fillRect(left + width * 0.45, frontY + 21 * detailScale, 10 * detailScale, 8 * detailScale);
+
+  context.fillStyle = "#7dd8ae";
+  context.fillRect(left + width * 0.12, frontY + 22 * detailScale, 6 * detailScale, 14 * detailScale);
+  context.fillStyle = "#b4ff66";
+  context.fillRect(left + width * 0.12, frontY + 40 * detailScale, 6 * detailScale, 4 * detailScale);
+  context.fillStyle = "#f3b54d";
+  context.fillRect(left + width * 0.64, frontY + 16 * detailScale, 10 * detailScale, 10 * detailScale);
+
+  context.strokeStyle = "rgba(12, 17, 24, 0.8)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(left + width * 0.5, frontY + 26 * detailScale);
+  context.bezierCurveTo(left + width * 0.74, frontY + 50, left + width * 0.84, frontBottomY + cableLift, left + width * 0.64, frontBottomY + cableLift);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(left - width * 0.08, frontBottomY - 6);
+  context.bezierCurveTo(left - width * 0.24, frontBottomY + 10, left - width * 0.32, frontBottomY + 18, left - width * 0.16, frontBottomY + cableLift + 8);
+  context.stroke();
+
+  context.fillStyle = "#111722";
+  context.fillRect(left + width * 0.6, frontBottomY + cableLift - 3, 10, 6);
+  context.fillRect(left - width * 0.2, frontBottomY + cableLift + 5, 10, 6);
+
+  context.fillStyle = "rgba(12, 17, 24, 0.78)";
+  context.font = `${Math.max(8, Math.round(10 * detailScale))}px "IBM Plex Sans", sans-serif`;
+  context.textAlign = "center";
+  context.fillText("ETH VALIDATOR", left + width * 0.24, lidTopY + topHeight * 0.5);
+
+  context.strokeStyle = phase.accent;
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(left + width * 0.18, lidTopY + 12);
+  context.lineTo(left + width * 0.3, lidTopY + 22);
+  context.lineTo(left + width * 0.36, lidTopY + 16);
+  context.lineTo(left + width * 0.5, lidTopY + 26);
+  context.lineTo(left + width * 0.42, lidTopY + 36);
+  context.lineTo(left + width * 0.24, lidTopY + 30);
+  context.closePath();
+  context.stroke();
 }
 
 function createRenderCache() {

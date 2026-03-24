@@ -839,9 +839,9 @@ function startRound(mode) {
   resetBoard(true);
 }
 
-function getPrimaryGamepad() {
+function getConnectedGamepads() {
   const pads = navigator.getGamepads?.() ?? [];
-  return pads.find((pad) => pad?.connected) ?? null;
+  return [...pads].filter((pad) => pad?.connected);
 }
 
 function consumePadEdge(name, isDown) {
@@ -857,8 +857,8 @@ function axisDirection(value, negative, positive) {
 }
 
 function pollGamepad() {
-  const pad = getPrimaryGamepad();
-  if (!pad) {
+  const pads = getConnectedGamepads();
+  if (!pads.length) {
     state.gamepadAxis.horizontal = 0;
     state.gamepadAxis.vertical = 0;
     state.startSelectHeld = false;
@@ -866,28 +866,37 @@ function pollGamepad() {
   }
 
   const primaryPressed =
-    consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
-    consumePadEdge("primary2", !!pad.buttons[2]?.pressed) ||
-    consumePadEdge("start", !!pad.buttons[9]?.pressed);
-  const resetPressed = consumePadEdge("reset", !!pad.buttons[8]?.pressed);
-  const mutePressed = consumePadEdge("mute", !!pad.buttons[3]?.pressed);
-  const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed);
-  const regularPressed = consumePadEdge("regular", !!pad.buttons[4]?.pressed);
-  const liquidPressed = consumePadEdge("liquid", !!pad.buttons[5]?.pressed);
+    consumePadEdge("primary0", pads.some((pad) => !!pad.buttons[0]?.pressed)) ||
+    consumePadEdge("primary2", pads.some((pad) => !!pad.buttons[2]?.pressed)) ||
+    consumePadEdge("start", pads.some((pad) => !!pad.buttons[9]?.pressed));
+  const resetPressed = consumePadEdge("reset", pads.some((pad) => !!pad.buttons[8]?.pressed));
+  const mutePressed = consumePadEdge("mute", pads.some((pad) => !!pad.buttons[3]?.pressed));
+  const backPressed = consumePadEdge("back", pads.some((pad) => !!pad.buttons[1]?.pressed));
+  const regularPressed = consumePadEdge("regular", pads.some((pad) => !!pad.buttons[4]?.pressed));
+  const liquidPressed = consumePadEdge("liquid", pads.some((pad) => !!pad.buttons[5]?.pressed));
 
   if (mutePressed) {
     state.muted = !state.muted;
     if (audio.master) audio.master.gain.value = state.muted ? 0 : 0.24;
   }
 
+  const horizontalAxis = pads.reduce((value, pad) => {
+    const candidate = pad.axes[0] ?? 0;
+    return Math.abs(candidate) > Math.abs(value) ? candidate : value;
+  }, 0);
+  const verticalAxis = pads.reduce((value, pad) => {
+    const candidate = pad.axes[1] ?? 0;
+    return Math.abs(candidate) > Math.abs(value) ? candidate : value;
+  }, 0);
+
   const horizontalDir =
-    axisDirection(pad.axes[0] ?? 0, "left", "right") ||
-    (!!pad.buttons[14]?.pressed ? "left" : null) ||
-    (!!pad.buttons[15]?.pressed ? "right" : null);
+    axisDirection(horizontalAxis, "left", "right") ||
+    (pads.some((pad) => !!pad.buttons[14]?.pressed) ? "left" : null) ||
+    (pads.some((pad) => !!pad.buttons[15]?.pressed) ? "right" : null);
   const verticalDir =
-    axisDirection(pad.axes[1] ?? 0, "up", "down") ||
-    (!!pad.buttons[12]?.pressed ? "up" : null) ||
-    (!!pad.buttons[13]?.pressed ? "down" : null);
+    axisDirection(verticalAxis, "up", "down") ||
+    (pads.some((pad) => !!pad.buttons[12]?.pressed) ? "up" : null) ||
+    (pads.some((pad) => !!pad.buttons[13]?.pressed) ? "down" : null);
 
   const horizontalState = horizontalDir ? (horizontalDir === "left" ? -1 : 1) : 0;
   const verticalState = verticalDir ? (verticalDir === "up" ? -1 : 1) : 0;
@@ -897,7 +906,8 @@ function pollGamepad() {
   state.gamepadAxis.horizontal = horizontalState;
   state.gamepadAxis.vertical = verticalState;
 
-  const startSelectHeld = !!pad.buttons[8]?.pressed && !!pad.buttons[9]?.pressed;
+  const startSelectHeld =
+    pads.some((pad) => !!pad.buttons[8]?.pressed) && pads.some((pad) => !!pad.buttons[9]?.pressed);
   const startSelectPressed = startSelectHeld && !state.startSelectHeld;
   state.startSelectHeld = startSelectHeld;
 
@@ -951,7 +961,7 @@ function pollGamepad() {
 
   if (regularPressed) handleDifficultyChoice("regular");
   if (liquidPressed) handleDifficultyChoice("liquid");
-  if (resetPressed || consumePadEdge("menuStart", !!pad.buttons[9]?.pressed)) openGameMenu();
+  if (resetPressed || consumePadEdge("menuStart", pads.some((pad) => !!pad.buttons[9]?.pressed))) openGameMenu();
 
   if (horizontalEdge) state.nextDir = horizontalState < 0 ? "left" : "right";
   if (verticalEdge) state.nextDir = verticalState < 0 ? "up" : "down";

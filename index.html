@@ -143,8 +143,8 @@
         cards.forEach((card, i) => card.classList.toggle("is-selected", i === selectedIndex));
       }
 
-      function getPrimaryPad() {
-        return [...(navigator.getGamepads?.() ?? [])].find(Boolean) ?? null;
+      function getConnectedPads() {
+        return [...(navigator.getGamepads?.() ?? [])].filter((pad) => pad?.connected);
       }
 
       function consumeButtonEdge(name, isDown) {
@@ -158,24 +158,27 @@
       }
 
       function pollPad() {
-        const pad = getPrimaryPad();
-        if (!pad) {
+        const pads = getConnectedPads();
+        if (!pads.length) {
           padAxis = 0;
           requestAnimationFrame(pollPad);
           return;
         }
 
-        const axis = pad.axes[0] ?? 0;
+        const axis = pads.reduce((value, pad) => {
+          const candidate = pad.axes[0] ?? 0;
+          return Math.abs(candidate) > Math.abs(value) ? candidate : value;
+        }, 0);
         const nextAxis = axis <= -0.45 ? -1 : axis >= 0.45 ? 1 : 0;
         if (nextAxis !== 0 && nextAxis !== padAxis) selectCard(selectedIndex + nextAxis);
         padAxis = nextAxis;
 
-        const leftPressed = consumeButtonEdge("left", !!pad.buttons[14]?.pressed);
-        const rightPressed = consumeButtonEdge("right", !!pad.buttons[15]?.pressed);
+        const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
+        const rightPressed = consumeButtonEdge("right", pads.some((pad) => !!pad.buttons[15]?.pressed));
         const confirmPressed =
-          consumeButtonEdge("a", !!pad.buttons[0]?.pressed) ||
-          consumeButtonEdge("start", !!pad.buttons[9]?.pressed) ||
-          consumeButtonEdge("menu", !!pad.buttons[8]?.pressed);
+          consumeButtonEdge("a", pads.some((pad) => !!pad.buttons[0]?.pressed)) ||
+          consumeButtonEdge("start", pads.some((pad) => !!pad.buttons[9]?.pressed)) ||
+          consumeButtonEdge("menu", pads.some((pad) => !!pad.buttons[8]?.pressed));
 
         if (leftPressed) selectCard(selectedIndex - 1);
         if (rightPressed) selectCard(selectedIndex + 1);

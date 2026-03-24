@@ -403,9 +403,9 @@ overlay.addEventListener("pointerdown", (event) => {
   startSelectedMode(game.activeMode);
 });
 
-function getPrimaryGamepad() {
+function getConnectedGamepads() {
   const pads = navigator.getGamepads?.() ?? [];
-  return pads.find((pad) => pad?.connected) ?? null;
+  return [...pads].filter((pad) => pad?.connected);
 }
 
 function consumePadEdge(name, isDown) {
@@ -422,44 +422,55 @@ function axisDirection(value, negative, positive) {
 
 function pollGamepad() {
   if (isInputCoolingDown()) {
-    const pad = getPrimaryGamepad();
-    if (pad) {
-      consumePadEdge("primary0", !!pad.buttons[0]?.pressed);
-      consumePadEdge("primary2", !!pad.buttons[2]?.pressed);
-      consumePadEdge("start", !!pad.buttons[9]?.pressed);
-      consumePadEdge("back", !!pad.buttons[1]?.pressed);
-      consumePadEdge("select", !!pad.buttons[8]?.pressed);
-      consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
-      consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
+    const pads = getConnectedGamepads();
+    if (pads.length) {
+      consumePadEdge("primary0", pads.some((pad) => !!pad.buttons[0]?.pressed));
+      consumePadEdge("primary2", pads.some((pad) => !!pad.buttons[2]?.pressed));
+      consumePadEdge("start", pads.some((pad) => !!pad.buttons[9]?.pressed));
+      consumePadEdge("back", pads.some((pad) => !!pad.buttons[1]?.pressed));
+      consumePadEdge("select", pads.some((pad) => !!pad.buttons[8]?.pressed));
+      consumePadEdge("leftShoulder", pads.some((pad) => !!pad.buttons[4]?.pressed));
+      consumePadEdge("rightShoulder", pads.some((pad) => !!pad.buttons[5]?.pressed));
       game.gamepadAxis.horizontal = 0;
       game.gamepadAxis.vertical = 0;
     }
     return;
   }
 
-  const pad = getPrimaryGamepad();
-  if (!pad) {
+  const pads = getConnectedGamepads();
+  if (!pads.length) {
     game.gamepadAxis.horizontal = 0;
     game.gamepadAxis.vertical = 0;
     return;
   }
 
   const primaryPressed =
-    consumePadEdge("primary0", !!pad.buttons[0]?.pressed) ||
-    consumePadEdge("primary2", !!pad.buttons[2]?.pressed);
-  const startPressed = consumePadEdge("start", !!pad.buttons[9]?.pressed);
-  const backPressed = consumePadEdge("back", !!pad.buttons[1]?.pressed) || consumePadEdge("select", !!pad.buttons[8]?.pressed);
-  const leftPressed = consumePadEdge("leftShoulder", !!pad.buttons[4]?.pressed);
-  const rightPressed = consumePadEdge("rightShoulder", !!pad.buttons[5]?.pressed);
+    consumePadEdge("primary0", pads.some((pad) => !!pad.buttons[0]?.pressed)) ||
+    consumePadEdge("primary2", pads.some((pad) => !!pad.buttons[2]?.pressed));
+  const startPressed = consumePadEdge("start", pads.some((pad) => !!pad.buttons[9]?.pressed));
+  const backPressed =
+    consumePadEdge("back", pads.some((pad) => !!pad.buttons[1]?.pressed)) ||
+    consumePadEdge("select", pads.some((pad) => !!pad.buttons[8]?.pressed));
+  const leftPressed = consumePadEdge("leftShoulder", pads.some((pad) => !!pad.buttons[4]?.pressed));
+  const rightPressed = consumePadEdge("rightShoulder", pads.some((pad) => !!pad.buttons[5]?.pressed));
+
+  const horizontalAxis = pads.reduce((value, pad) => {
+    const candidate = pad.axes[0] ?? 0;
+    return Math.abs(candidate) > Math.abs(value) ? candidate : value;
+  }, 0);
+  const verticalAxis = pads.reduce((value, pad) => {
+    const candidate = pad.axes[1] ?? 0;
+    return Math.abs(candidate) > Math.abs(value) ? candidate : value;
+  }, 0);
 
   const horizontalDir =
-    axisDirection(pad.axes[0] ?? 0, "left", "right") ||
-    (!!pad.buttons[14]?.pressed ? "left" : null) ||
-    (!!pad.buttons[15]?.pressed ? "right" : null);
+    axisDirection(horizontalAxis, "left", "right") ||
+    (pads.some((pad) => !!pad.buttons[14]?.pressed) ? "left" : null) ||
+    (pads.some((pad) => !!pad.buttons[15]?.pressed) ? "right" : null);
   const verticalDir =
-    axisDirection(pad.axes[1] ?? 0, "up", "down") ||
-    (!!pad.buttons[12]?.pressed ? "up" : null) ||
-    (!!pad.buttons[13]?.pressed ? "down" : null);
+    axisDirection(verticalAxis, "up", "down") ||
+    (pads.some((pad) => !!pad.buttons[12]?.pressed) ? "up" : null) ||
+    (pads.some((pad) => !!pad.buttons[13]?.pressed) ? "down" : null);
 
   const horizontalState = horizontalDir ? (horizontalDir === "left" ? -1 : 1) : 0;
   const verticalState = verticalDir ? (verticalDir === "up" ? -1 : 1) : 0;

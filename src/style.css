@@ -120,7 +120,9 @@ canvas {
 }
 
 .stakers-overlay-card {
-  width: min(690px, calc(100% - 52px));
+  width: min(744px, calc(100% - 36px));
+  max-height: calc(100% - 36px);
+  overflow: auto;
   background:
     linear-gradient(180deg, rgba(4, 8, 16, 0.97), rgba(5, 9, 19, 0.98)),
     radial-gradient(circle at top, rgba(72, 164, 255, 0.08), transparent 40%);
@@ -129,9 +131,9 @@ canvas {
     0 20px 50px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border-radius: 30px;
-  padding: 30px 32px;
+  padding: 28px 28px 24px;
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .stakers-overlay-kicker {
@@ -142,15 +144,16 @@ canvas {
 
 .stakers-overlay-title {
   margin: 0;
-  font-size: 52px;
-  line-height: 0.94;
+  font-size: clamp(34px, 5vw, 46px);
+  line-height: 1.02;
   color: #f7fbff;
+  overflow-wrap: anywhere;
 }
 
 .stakers-overlay-copy {
   margin: 0;
-  font-size: 22px;
-  line-height: 1.42;
+  font-size: 19px;
+  line-height: 1.5;
   color: #d7e9ff;
 }
 
@@ -181,10 +184,10 @@ canvas {
 }
 
 .stakers-mode-card {
-  padding: 20px;
+  padding: 18px;
   display: grid;
   gap: 10px;
-  min-height: 220px;
+  min-height: 0;
 }
 
 .stakers-mode-card.is-selected,
@@ -199,13 +202,14 @@ canvas {
 }
 
 .stakers-mode-title {
-  font-size: 30px;
+  font-size: 26px;
   letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
 }
 
 .stakers-mode-copy {
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 1.5;
   color: #d7e9ff;
 }
 
@@ -254,7 +258,16 @@ canvas {
 }
 
 .stakers-overlay-copy--compact {
-  font-size: 20px;
+  font-size: 18px;
+}
+
+.stakers-leaderboard-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(82, 111, 151, 0.72);
+  background: linear-gradient(180deg, rgba(10, 16, 26, 0.9), rgba(8, 13, 22, 0.9));
 }
 
 .stakers-results-grid {
@@ -290,14 +303,31 @@ canvas {
 }
 
 .leaderboard-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(92px, 0.8fr) auto;
+  gap: 12px;
+  align-items: center;
   color: #f2f8ff;
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.leaderboard-rank,
+.leaderboard-mode {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-mode {
+  color: #9fd9ff;
+}
+
+.leaderboard-score {
+  text-align: right;
 }
 
 .leaderboard-empty {
@@ -308,6 +338,8 @@ canvas {
 .entry-picker {
   display: flex;
   gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .entry-slot {
@@ -364,6 +396,15 @@ canvas {
   .stakers-overlay-copy,
   .stakers-mode-copy {
     font-size: 18px;
+  }
+
+  .leaderboard-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .leaderboard-score {
+    text-align: left;
   }
 
   .stakers-mode-grid,

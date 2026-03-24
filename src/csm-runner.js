@@ -14,6 +14,8 @@ const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").mat
 const EFFECTS_ENABLED = !LOW_PERF_DEVICE && !REDUCED_MOTION;
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
 const HOME_URL = "./index.html";
+const HIGH_SCORE_KEY = "csm-runner-high-score";
+const LEADERBOARD_KEY = "csm-runner-leaderboard";
 const PROPOSAL_ART = [
   "██████  ██       ██████   ██████ ██   ██",
   "██   ██ ██      ██    ██ ██      ██  ██ ",
@@ -44,8 +46,6 @@ const MODES = {
     bond: "32 ETH",
     apr: "2.75%",
     hint: "Space / Up / click / tap flap.",
-    highScoreKey: "csm-runner-high-score-vanilla",
-    leaderboardKey: "csm-runner-leaderboard-vanilla",
   },
   csm: {
     key: "csm",
@@ -53,8 +53,6 @@ const MODES = {
     bond: "1.5 ETH",
     apr: "5.87%",
     hint: "Space / Up jump.",
-    highScoreKey: "csm-runner-high-score-csm",
-    leaderboardKey: "csm-runner-leaderboard-csm",
   },
 };
 
@@ -625,16 +623,16 @@ function getModeConfig() {
 }
 
 function getHighScore(mode = game.activeMode) {
-  return Number.parseInt(storage.get(MODES[mode].highScoreKey) || "0", 10) || 0;
+  return Number.parseInt(storage.get(HIGH_SCORE_KEY) || "0", 10) || 0;
 }
 
 function setHighScore(value) {
-  storage.set(getModeConfig().highScoreKey, String(value));
+  storage.set(HIGH_SCORE_KEY, String(value));
 }
 
 function getLeaderboard(mode = game.activeMode) {
   try {
-    const raw = storage.get(MODES[mode].leaderboardKey);
+    const raw = storage.get(LEADERBOARD_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -643,23 +641,24 @@ function getLeaderboard(mode = game.activeMode) {
 }
 
 function saveLeaderboard(entries, mode = game.activeMode) {
-  storage.set(MODES[mode].leaderboardKey, JSON.stringify(entries));
+  storage.set(LEADERBOARD_KEY, JSON.stringify(entries));
 }
 
 function addLeaderboardEntry(id, score, mode = game.activeMode) {
-  const entries = getLeaderboard(mode);
+  const entries = getLeaderboard();
   entries.push({
     id: id.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5).padEnd(5, "X"),
     score,
     slot: SLOT_BASE + score,
+    mode,
     createdAt: Date.now(),
   });
   entries.sort((a, b) => b.score - a.score || a.createdAt - b.createdAt);
-  saveLeaderboard(entries.slice(0, 12), mode);
+  saveLeaderboard(entries.slice(0, 12));
 }
 
 function renderLeaderboard(mode) {
-  const entries = getLeaderboard(mode).slice(0, 5);
+  const entries = getLeaderboard().slice(0, 5);
   if (!entries.length) {
     return `<div class="leaderboard-empty">No scores recorded.</div>`;
   }
@@ -669,8 +668,9 @@ function renderLeaderboard(mode) {
         .map(
           (entry, index) => `
             <div class="leaderboard-row">
-              <span>${index + 1}. ${entry.id}</span>
-              <span>${formatSlot(entry.slot)}</span>
+              <span class="leaderboard-rank">${index + 1}. ${entry.id}</span>
+              <span class="leaderboard-mode">${MODES[entry.mode]?.label || entry.mode || "-"}</span>
+              <span class="leaderboard-score">${formatSlot(entry.slot)}</span>
             </div>`
         )
         .join("")}
@@ -685,7 +685,7 @@ function startSelectedMode(mode) {
   game.phaseIndex = 0;
   game.slotsCleared = 0;
   game.nextProposalAt = 10 + ((Math.random() * 6) | 0);
-  game.bestBeforeRun = getHighScore(mode);
+  game.bestBeforeRun = getHighScore();
   game.pendingLeaderboardEntry = false;
   game.proposalFlash = 0;
   game.hardforkFlash = 0;
@@ -762,17 +762,17 @@ function showTitle() {
         <span class="mode-card-metric">Bond: 32 ETH</span>
         <span class="mode-card-metric">APR: 2.75%</span>
         <span class="mode-card-copy">Stake 32 ETH to become a vanilla ETH staker. Earn an estimated 2.75% APR.</span>
-        <span class="mode-card-subtitle">Leaderboard</span>
-        ${renderLeaderboard("vanilla")}
       </button>
       <button class="mode-card ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="csm">
         <span class="mode-card-title">CSM ICS Mode</span>
         <span class="mode-card-metric">Bond: 1.5 ETH</span>
         <span class="mode-card-metric">APR: 5.87%</span>
         <span class="mode-card-copy">Bond 1.5 ETH to become a CSM Identified Community Staker and earn an estimated ~5.87% APR.</span>
-        <span class="mode-card-subtitle">Leaderboard</span>
-        ${renderLeaderboard("csm")}
       </button>
+    </div>
+    <div class="mode-card mode-card--leaderboard">
+      <span class="mode-card-subtitle">All-Time Top Runs</span>
+      ${renderLeaderboard()}
     </div>
     <div class="overlay-actions-row">
       <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
@@ -807,7 +807,7 @@ function showGameOver() {
     <div class="overlay-kicker">${getModeConfig().label}</div>
     <h2 class="overlay-title">Restart</h2>
     <div class="overlay-scoreline">Slot ${formatSlot(SLOT_BASE + game.slotsCleared)}</div>
-    ${renderLeaderboard(game.activeMode)}
+    ${renderLeaderboard()}
     <div class="overlay-actions-row">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
       <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>

@@ -261,14 +261,31 @@ body,
 }
 
 .leaderboard-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(120px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
   color: var(--text);
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.leaderboard-rank,
+.leaderboard-mode {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-mode {
+  color: var(--muted);
+}
+
+.leaderboard-score {
+  text-align: right;
 }
 
 .leaderboard-empty {
@@ -302,6 +319,8 @@ body,
   margin-top: 16px;
   display: flex;
   gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .entry-slot {
@@ -352,6 +371,10 @@ body,
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.mode-card--leaderboard {
+  cursor: default;
 }
 
 .overlay-actions-stack {

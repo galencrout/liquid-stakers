@@ -60,6 +60,8 @@ const HOME_URL = "./index.html";
 const CHOMP_SCORE = 0.3;
 const GHOST_SCORE = 2;
 const START_LIVES = 3;
+const HIGH_SCORE_KEY = "stake-man-high-score";
+const LEADERBOARD_KEY = "stake-man-leaderboard";
 
 const DIRS = {
   left: { x: -1, y: 0 },
@@ -127,13 +129,9 @@ const EXTRA_PASSAGES = [
 const MODE_CONFIG = {
   regular: {
     label: "Regular Staking",
-    highScoreKey: "stake-man-high-score-regular",
-    leaderboardKey: "stake-man-leaderboard-regular",
   },
   liquid: {
     label: "Liquid Staking (Lido)",
-    highScoreKey: "stake-man-high-score-liquid",
-    leaderboardKey: "stake-man-leaderboard-liquid",
   },
 };
 
@@ -236,15 +234,15 @@ function showDifficultyScreen() {
         <div class="mode-select-card">
           <h3>Regular Staking</h3>
           <p>L or move left: queue delay before chomping ETH.</p>
-          <div class="mode-select-subtitle">Leaderboard</div>
-          ${renderLeaderboard("regular")}
         </div>
         <div class="mode-select-card">
           <h3>Liquid Staking (Lido)</h3>
           <p>R or move right: chomp from the outset.</p>
-          <div class="mode-select-subtitle">Leaderboard</div>
-          ${renderLeaderboard("liquid")}
         </div>
+      </div>
+      <div class="mode-select-card mode-select-card--leaderboard">
+        <div class="mode-select-subtitle">All-Time Top Runs</div>
+        ${renderLeaderboard()}
       </div>
       <div class="overlay-footer">Press L or R to start. Press B to go back.</div>
     </div>
@@ -262,6 +260,10 @@ function showEndScreen(kind) {
         <h2>New High Score</h2>
         <div class="overlay-lines"><p>Enter your five-letter ID for the leaderboard.</p></div>
         <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
+        <div class="overlay-actions-row">
+          <button class="overlay-button" type="button" data-action="save-leaderboard">Save Score</button>
+          <button class="overlay-button overlay-button--ghost" type="button" data-action="skip-leaderboard">Skip</button>
+        </div>
         <div class="overlay-footer">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
       </div>
     `;
@@ -278,7 +280,7 @@ function showEndScreen(kind) {
           <p>Stake-Man cleared the maze.</p>
         </div>
         <div class="mode-select-subtitle">Leaderboard</div>
-        ${renderLeaderboard(state.mode)}
+        ${renderLeaderboard()}
         <div class="overlay-footer">Press A or B for game mode. Start or Select opens menu.</div>
       </div>
     `;
@@ -291,7 +293,7 @@ function showEndScreen(kind) {
           <p>Try a new run with better pathing.</p>
         </div>
         <div class="mode-select-subtitle">Leaderboard</div>
-        ${renderLeaderboard(state.mode)}
+        ${renderLeaderboard()}
         <div class="overlay-footer">Press A or B for game mode. Start or Select opens menu.</div>
       </div>
     `;
@@ -815,8 +817,8 @@ function checkHits(now) {
 }
 
 function finishRound(kind) {
-  if (state.score > getHighScore(state.mode)) {
-    setHighScore(state.score, state.mode);
+  if (state.score > getHighScore()) {
+    setHighScore(state.score);
     if (state.score > state.bestBeforeRun) {
       state.pendingLeaderboardEntry = true;
       leaderboardState.mode = state.mode;
@@ -830,7 +832,7 @@ function finishRound(kind) {
 
 function startRound(mode) {
   state.mode = mode;
-  state.bestBeforeRun = getHighScore(mode);
+  state.bestBeforeRun = getHighScore();
   state.pendingLeaderboardEntry = false;
   leaderboardState.mode = null;
   leaderboardState.score = 0;
@@ -1029,17 +1031,16 @@ function createStorage() {
 }
 
 function getHighScore(mode = state.mode || "regular") {
-  const config = MODE_CONFIG[mode];
-  return Number(storage.get(config.highScoreKey) || "0") || 0;
+  return Number(storage.get(HIGH_SCORE_KEY) || "0") || 0;
 }
 
 function setHighScore(score, mode = state.mode || "regular") {
-  storage.set(MODE_CONFIG[mode].highScoreKey, String(score));
+  storage.set(HIGH_SCORE_KEY, String(score));
 }
 
 function getLeaderboard(mode = state.mode || "regular") {
   try {
-    const raw = storage.get(MODE_CONFIG[mode].leaderboardKey);
+    const raw = storage.get(LEADERBOARD_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -1048,22 +1049,23 @@ function getLeaderboard(mode = state.mode || "regular") {
 }
 
 function saveLeaderboard(entries, mode = state.mode || "regular") {
-  storage.set(MODE_CONFIG[mode].leaderboardKey, JSON.stringify(entries));
+  storage.set(LEADERBOARD_KEY, JSON.stringify(entries));
 }
 
 function addLeaderboardEntry(id, score, mode = state.mode || "regular") {
-  const entries = getLeaderboard(mode);
+  const entries = getLeaderboard();
   entries.push({
     id: id.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5).padEnd(5, "X"),
     score,
+    mode,
     createdAt: Date.now(),
   });
   entries.sort((a, b) => b.score - a.score || a.createdAt - b.createdAt);
-  saveLeaderboard(entries.slice(0, 12), mode);
+  saveLeaderboard(entries.slice(0, 12));
 }
 
 function renderLeaderboard(mode) {
-  const entries = getLeaderboard(mode).slice(0, 5);
+  const entries = getLeaderboard().slice(0, 5);
   if (!entries.length) return `<div class="leaderboard-empty">No scores recorded.</div>`;
   return `
     <div class="leaderboard">
@@ -1071,8 +1073,9 @@ function renderLeaderboard(mode) {
         .map(
           (entry, index) => `
             <div class="leaderboard-row">
-              <span>${index + 1}. ${entry.id}</span>
-              <span>${entry.score.toFixed(1)}</span>
+              <span class="leaderboard-rank">${index + 1}. ${entry.id}</span>
+              <span class="leaderboard-mode">${MODE_CONFIG[entry.mode]?.label || entry.mode || "-"}</span>
+              <span class="leaderboard-score">${entry.score.toFixed(1)}</span>
             </div>
           `
         )
@@ -1229,6 +1232,18 @@ window.addEventListener("keydown", (e) => {
   if (key === "arrowright" || key === "d") state.nextDir = "right";
   if (key === "arrowup" || key === "w") state.nextDir = "up";
   if (key === "arrowdown" || key === "s") state.nextDir = "down";
+});
+
+overlay.addEventListener("pointerdown", (event) => {
+  const action = event.target instanceof Element ? event.target.closest("[data-action]") : null;
+  if (!action) return;
+  const type = action.getAttribute("data-action");
+  if (type === "save-leaderboard") {
+    saveLeaderboardInitials();
+  } else if (type === "skip-leaderboard") {
+    state.pendingLeaderboardEntry = false;
+    showEndScreen(state.phase);
+  }
 });
 
 window.addEventListener("pointerdown", ensureAudio, { once: true });

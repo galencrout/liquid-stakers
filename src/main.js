@@ -12,6 +12,8 @@ const ENEMY_ZONE_Y = 500;
 const GAMEPAD_DEADZONE = 0.45;
 const MAX_LEVEL = 20;
 const HOME_URL = "./index.html";
+const HIGH_SCORE_KEY = "liquid-stakers-high-score";
+const LEADERBOARD_KEY = "liquid-stakers-leaderboard";
 
 const INTRO_STAGES = [
   {
@@ -39,8 +41,6 @@ const MODES = [
     key: "delegated",
     label: "Delegated Staking",
     shortLabel: "Delegated",
-    highScoreKey: "liquid-stakers-high-score-delegated",
-    leaderboardKey: "liquid-stakers-leaderboard-delegated",
     copy: "Exit queue lag applies. Inputs arrive late and spikes can get worse without notice.",
     badge: "Exit Queue In Effect",
     hudColor: "#ffb2a1",
@@ -55,8 +55,6 @@ const MODES = [
     key: "stvaults",
     label: "stVaults",
     shortLabel: "stVaults",
-    highScoreKey: "liquid-stakers-high-score-stvaults",
-    leaderboardKey: "liquid-stakers-leaderboard-stvaults",
     copy: "Instant control. No queue lag. Markets may remain dynamic, but your inputs do not wait.",
     badge: "Instant Control",
     hudColor: "#9fe6ff",
@@ -178,6 +176,8 @@ const leaderboardState = {
   letters: ["A", "A", "A", "A", "A"],
   index: 0,
 };
+
+const modeLabelByKey = Object.fromEntries(MODES.map((mode) => [mode.key, mode.shortLabel]));
 
 showIntro();
 updateHud(true);
@@ -839,11 +839,13 @@ function showIntro() {
             <span class="stakers-mode-title">${mode.label}</span>
             <span class="stakers-mode-copy">${mode.copy}</span>
             <span class="stakers-mode-tag">${mode.badge}</span>
-            <span class="stakers-mode-subtitle">Leaderboard</span>
-            ${renderLeaderboard(mode.key)}
           </button>
         `
       ).join("")}
+    </div>
+    <div class="stakers-leaderboard-panel">
+      <span class="stakers-mode-subtitle">All-Time Top Runs</span>
+      ${renderLeaderboard()}
     </div>
     <div class="stakers-overlay-hint">Press 1 for Delegated. Press 2 for stVaults. A or Start begins.</div>
   `;
@@ -914,7 +916,10 @@ function showGameOver() {
       <div class="stakers-result-box"><span class="stakers-result-value">${state.activeMode.shortLabel}</span><span class="stakers-result-label">Mode</span></div>
       <div class="stakers-result-box"><span class="stakers-result-value">${state.player.shield}</span><span class="stakers-result-label">Shield</span></div>
     </div>
-    ${renderLeaderboard(state.activeMode.key)}
+    <div class="stakers-leaderboard-panel">
+      <span class="stakers-mode-subtitle">All-Time Top Runs</span>
+      ${renderLeaderboard()}
+    </div>
     <p class="stakers-overlay-copy">${state.endReason}</p>
     <div class="stakers-overlay-actions">
       <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Game Mode</button>
@@ -948,7 +953,7 @@ function startGame(mode) {
   state.enemyBullets.length = 0;
   state.effects.length = 0;
   state.endReason = "";
-  state.bestBeforeRun = getHighScore(mode.key);
+  state.bestBeforeRun = getHighScore();
   state.pendingLeaderboardEntry = false;
   state.pauseStartedAt = 0;
   ui.pauseIndex = 0;
@@ -1034,8 +1039,8 @@ function endRound(reason) {
   if (state.roundEnded) return;
   state.roundEnded = true;
   state.endReason = reason;
-  if (state.score > getHighScore(state.activeMode.key)) {
-    setHighScore(state.score, state.activeMode.key);
+  if (state.score > getHighScore()) {
+    setHighScore(state.score);
     if (state.score > state.bestBeforeRun) {
       state.pendingLeaderboardEntry = true;
       leaderboardState.mode = state.activeMode.key;
@@ -1251,21 +1256,17 @@ function createStorage() {
   };
 }
 
-function getHighScore(modeKey = state.activeMode.key) {
-  const mode = MODES.find((entry) => entry.key === modeKey);
-  return Number.parseInt(storage.get(mode?.highScoreKey || "") || "0", 10) || 0;
+function getHighScore() {
+  return Number.parseInt(storage.get(HIGH_SCORE_KEY) || "0", 10) || 0;
 }
 
-function setHighScore(score, modeKey = state.activeMode.key) {
-  const mode = MODES.find((entry) => entry.key === modeKey);
-  if (mode) storage.set(mode.highScoreKey, String(score));
+function setHighScore(score) {
+  storage.set(HIGH_SCORE_KEY, String(score));
 }
 
-function getLeaderboard(modeKey = state.activeMode.key) {
-  const mode = MODES.find((entry) => entry.key === modeKey);
-  if (!mode) return [];
+function getLeaderboard() {
   try {
-    const raw = storage.get(mode.leaderboardKey);
+    const raw = storage.get(LEADERBOARD_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -1273,24 +1274,24 @@ function getLeaderboard(modeKey = state.activeMode.key) {
   }
 }
 
-function saveLeaderboard(entries, modeKey = state.activeMode.key) {
-  const mode = MODES.find((entry) => entry.key === modeKey);
-  if (mode) storage.set(mode.leaderboardKey, JSON.stringify(entries));
+function saveLeaderboard(entries) {
+  storage.set(LEADERBOARD_KEY, JSON.stringify(entries));
 }
 
 function addLeaderboardEntry(id, score, modeKey = state.activeMode.key) {
-  const entries = getLeaderboard(modeKey);
+  const entries = getLeaderboard();
   entries.push({
     id: id.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5).padEnd(5, "X"),
     score,
+    mode: modeKey,
     createdAt: Date.now(),
   });
   entries.sort((a, b) => b.score - a.score || a.createdAt - b.createdAt);
-  saveLeaderboard(entries.slice(0, 12), modeKey);
+  saveLeaderboard(entries.slice(0, 12));
 }
 
-function renderLeaderboard(modeKey) {
-  const entries = getLeaderboard(modeKey).slice(0, 5);
+function renderLeaderboard() {
+  const entries = getLeaderboard().slice(0, 5);
   if (!entries.length) {
     return `<div class="leaderboard-empty">No scores recorded.</div>`;
   }
@@ -1300,8 +1301,9 @@ function renderLeaderboard(modeKey) {
         .map(
           (entry, index) => `
             <div class="leaderboard-row">
-              <span>${index + 1}. ${entry.id}</span>
-              <span>${entry.score}</span>
+              <span class="leaderboard-rank">${index + 1}. ${entry.id}</span>
+              <span class="leaderboard-mode">${modeLabelByKey[entry.mode] || entry.mode || "-"}</span>
+              <span class="leaderboard-score">${entry.score}</span>
             </div>
           `
         )

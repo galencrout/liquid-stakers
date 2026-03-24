@@ -188,6 +188,10 @@ canvas {
   padding: 14px;
 }
 
+.mode-select-card--leaderboard {
+  grid-column: 1 / -1;
+}
+
 .mode-select-card h3 {
   margin: 0 0 6px;
   font-size: 22px;
@@ -213,14 +217,31 @@ canvas {
 }
 
 .leaderboard-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(110px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
   color: #eaf3ff;
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.leaderboard-rank,
+.leaderboard-mode {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-mode {
+  color: #89ddff;
+}
+
+.leaderboard-score {
+  text-align: right;
 }
 
 .leaderboard-empty {
@@ -233,6 +254,28 @@ canvas {
   display: flex;
   justify-content: center;
   gap: 10px;
+}
+
+.overlay-actions-row {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overlay-button {
+  appearance: none;
+  border: 1px solid #6b8ebd;
+  background: linear-gradient(180deg, rgba(16, 35, 61, 0.98), rgba(11, 25, 43, 0.94));
+  color: #eff7ff;
+  font: inherit;
+  font-weight: 700;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.overlay-button--ghost {
+  background: linear-gradient(180deg, rgba(10, 15, 25, 0.9), rgba(6, 11, 20, 0.9));
 }
 
 .entry-slot {

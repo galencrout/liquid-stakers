@@ -32,9 +32,9 @@ const PROPOSAL_ART = [
 const PROPOSAL_FLASH_DURATION = 1.0;
 const HARDFORK_FLASH_DURATION = 1.0;
 const INPUT_COOLDOWN_MS = 350;
-const PROPOSAL_FLASH_ALPHA = 0.46;
+const PROPOSAL_FLASH_ALPHA = 0.58;
 const PROPOSAL_FLASH_TRAVEL = 500;
-const HARDFORK_FLASH_ALPHA = 0.34;
+const HARDFORK_FLASH_ALPHA = 0.42;
 const HARDFORK_FLASH_TRAVEL = 260;
 
 const MODES = {
@@ -1205,15 +1205,15 @@ function render() {
 
   if (game.activeMode === "vanilla") {
     drawFlappyLanes(phase);
+    drawFlappyColumns(phase);
     drawProposalArt();
     drawHardforkArt();
-    drawFlappyColumns(phase);
     drawFlappyPlayer(phase);
   } else {
     drawRunnerLanes(phase);
+    drawRunnerObstacles(phase);
     drawProposalArt();
     drawHardforkArt();
-    drawRunnerObstacles(phase);
     drawRunnerPlayer(phase);
   }
   drawParticles();
@@ -1227,7 +1227,7 @@ function drawProposalArt() {
   const progress = 1 - game.proposalFlash / PROPOSAL_FLASH_DURATION;
   const baseX = 110 + Math.sin(progress * Math.PI * 1.1) * 16;
   const baseY = 42 + progress * PROPOSAL_FLASH_TRAVEL;
-  const alpha = PROPOSAL_FLASH_ALPHA * (1 - progress * 0.42);
+  const alpha = PROPOSAL_FLASH_ALPHA * (1 - progress * 0.36);
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -1241,7 +1241,7 @@ function drawHardforkArt() {
   }
 
   const progress = 1 - game.hardforkFlash / HARDFORK_FLASH_DURATION;
-  const alpha = HARDFORK_FLASH_ALPHA * (1 - progress * 0.45);
+  const alpha = HARDFORK_FLASH_ALPHA * (1 - progress * 0.4);
   const x = 126;
   const y = 96 + progress * HARDFORK_FLASH_TRAVEL;
 

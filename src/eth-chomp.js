@@ -14,7 +14,7 @@ app.innerHTML = `
         <img src="${lidoHeaderPng}" alt="Lido mascot" />
       </div>
       <div class="hud-right">
-        <span id="modeBadge" class="badge">MODE: SELECT DIFFICULTY</span>
+        <span id="modeBadge" class="badge">MODE: SELECT GAME MODE</span>
         <span id="queueBadge" class="badge badge-queue">QUEUE: --</span>
         <span id="scoreBadge" class="badge">SCORE: 0.0</span>
         <span id="livesBadge" class="badge">LIVES: 3</span>

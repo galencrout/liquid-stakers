@@ -258,6 +258,15 @@ window.addEventListener("keydown", (event) => {
       event.preventDefault();
       saveLeaderboardInitials();
     }
+    if (event.code === "Space") {
+      event.preventDefault();
+      saveLeaderboardInitials();
+    }
+    if (event.code === "Escape" || event.code === "KeyB") {
+      event.preventDefault();
+      game.pendingLeaderboardEntry = false;
+      showGameOver();
+    }
     return;
   }
 
@@ -714,7 +723,7 @@ function showTitle() {
   overlayState.view = "title";
   showOverlay();
   overlayCard.innerHTML = `
-    <h1 class="overlay-title">Choose Mode</h1>
+    <h1 class="overlay-title">Choose Game Mode</h1>
     <div class="mode-grid">
       <button class="mode-card ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="vanilla">
         <span class="mode-card-title">Vanilla Staking</span>
@@ -734,7 +743,7 @@ function showTitle() {
       </button>
     </div>
     <div class="overlay-actions-row">
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Game Selector</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
     </div>
     <div class="overlay-menu-hint">Stick or D-pad chooses. L selects Vanilla. R selects CSM. A or Start confirms.</div>
   `;
@@ -750,6 +759,10 @@ function showGameOver() {
       <h2 class="overlay-title">New High Score</h2>
       <p class="overlay-copy overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
       <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
+      <div class="overlay-actions-row">
+        <button class="overlay-button" type="button" data-overlay-action="save-score">Save Score</button>
+        <button class="overlay-button overlay-button--ghost" type="button" data-overlay-action="skip-score">Skip</button>
+      </div>
       <div class="entry-hint">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
     `;
     return;
@@ -764,8 +777,8 @@ function showGameOver() {
     ${renderLeaderboard(game.activeMode)}
     <div class="overlay-actions-row">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Mode Select</button>
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Game Selector</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
     </div>
     <div class="overlay-menu-hint">Stick or D-pad chooses. A or Start confirms. B returns to mode select.</div>
   `;
@@ -805,12 +818,12 @@ function showPauseMenu() {
   showOverlay();
   overlayCard.innerHTML = `
     <div class="overlay-kicker">${getModeConfig().label}</div>
-    <h2 class="overlay-title">Operations Menu</h2>
+    <h2 class="overlay-title">Game Menu</h2>
     <div class="overlay-actions-stack">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="resume">Resume</button>
       <button class="overlay-button ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Restart</button>
-      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Mode Select</button>
-      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Game Selector</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
     </div>
     <div class="overlay-menu-hint">Joystick or D-pad navigates. A or Start confirms. B or Select resumes.</div>
   `;

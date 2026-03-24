@@ -31,6 +31,10 @@ const PROPOSAL_ART = [
 ];
 const PROPOSAL_FLASH_DURATION = 1.0;
 const HARDFORK_FLASH_DURATION = 1.0;
+const PROPOSAL_FLASH_ALPHA = 0.46;
+const PROPOSAL_FLASH_TRAVEL = 500;
+const HARDFORK_FLASH_ALPHA = 0.34;
+const HARDFORK_FLASH_TRAVEL = 260;
 
 const MODES = {
   vanilla: {
@@ -1144,14 +1148,16 @@ function render() {
   const backgroundKey = `${game.activeMode}-${game.phaseIndex}`;
   ctx.drawImage(renderCache.backgrounds[backgroundKey], 0, 0, WIDTH, HEIGHT);
 
-  drawProposalArt();
-  drawHardforkArt();
   if (game.activeMode === "vanilla") {
     drawFlappyLanes(phase);
+    drawProposalArt();
+    drawHardforkArt();
     drawFlappyColumns(phase);
     drawFlappyPlayer(phase);
   } else {
     drawRunnerLanes(phase);
+    drawProposalArt();
+    drawHardforkArt();
     drawRunnerObstacles(phase);
     drawRunnerPlayer(phase);
   }
@@ -1164,9 +1170,9 @@ function drawProposalArt() {
   }
 
   const progress = 1 - game.proposalFlash / PROPOSAL_FLASH_DURATION;
-  const baseX = 118 + Math.sin(progress * Math.PI * 1.1) * 20;
-  const baseY = 56 + progress * 520;
-  const alpha = 0.4 * (1 - progress * 0.5);
+  const baseX = 110 + Math.sin(progress * Math.PI * 1.1) * 16;
+  const baseY = 42 + progress * PROPOSAL_FLASH_TRAVEL;
+  const alpha = PROPOSAL_FLASH_ALPHA * (1 - progress * 0.42);
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -1180,9 +1186,9 @@ function drawHardforkArt() {
   }
 
   const progress = 1 - game.hardforkFlash / HARDFORK_FLASH_DURATION;
-  const alpha = 0.34 * (1 - progress * 0.45);
-  const x = 132;
-  const y = 110 + progress * 260;
+  const alpha = HARDFORK_FLASH_ALPHA * (1 - progress * 0.45);
+  const x = 126;
+  const y = 96 + progress * HARDFORK_FLASH_TRAVEL;
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -1485,10 +1491,10 @@ function buildProposalArtCanvas() {
     if (!line) return;
     const y = index * 32;
     const x = index * 7;
-    const lineAlpha = Math.max(0.18, 0.4 - index * 0.015);
+    const lineAlpha = Math.max(0.22, 0.52 - index * 0.016);
     artCtx.fillStyle = `rgba(255, 255, 255, ${lineAlpha})`;
     artCtx.fillText(line, x, y);
-    artCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0.05, lineAlpha * 0.38)})`;
+    artCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0.06, lineAlpha * 0.34)})`;
     artCtx.fillText(line, x + 6, y + 6);
   });
 
@@ -1505,10 +1511,10 @@ function getHardforkTextCanvas(text) {
     hardforkCtx.font = "bold 62px IBM Plex Mono, monospace";
     hardforkCtx.textAlign = "left";
     hardforkCtx.textBaseline = "top";
-    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.92)";
     hardforkCtx.fillText(text, 0, 0);
-    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.22)";
-    hardforkCtx.fillText(text, 10, 10);
+    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.2)";
+    hardforkCtx.fillText(text, 8, 8);
     renderCache.hardforkTexts[text] = hardforkCanvas;
   }
   return renderCache.hardforkTexts[text];

@@ -39,6 +39,8 @@ const MODES = [
     key: "delegated",
     label: "Delegated Staking",
     shortLabel: "Delegated",
+    highScoreKey: "liquid-stakers-high-score-delegated",
+    leaderboardKey: "liquid-stakers-leaderboard-delegated",
     copy: "Exit queue lag applies. Inputs arrive late and spikes can get worse without notice.",
     badge: "Exit Queue In Effect",
     hudColor: "#ffb2a1",
@@ -53,6 +55,8 @@ const MODES = [
     key: "stvaults",
     label: "stVaults",
     shortLabel: "stVaults",
+    highScoreKey: "liquid-stakers-high-score-stvaults",
+    leaderboardKey: "liquid-stakers-leaderboard-stvaults",
     copy: "Instant control. No queue lag. Markets may remain dynamic, but your inputs do not wait.",
     badge: "Instant Control",
     hudColor: "#9fe6ff",
@@ -159,12 +163,21 @@ const state = {
   endReason: "",
   message: "",
   messageAlpha: 0,
+  bestBeforeRun: 0,
+  pendingLeaderboardEntry: false,
   hudCache: { mode: "", level: "", score: "", time: "", lag: "", status: "" },
   nextHudRefreshAt: 0,
   pauseStartedAt: 0,
 };
 
 const audio = createAudio();
+const storage = createStorage();
+const leaderboardState = {
+  mode: null,
+  score: 0,
+  letters: ["A", "A", "A", "A", "A"],
+  index: 0,
+};
 
 showIntro();
 updateHud(true);
@@ -206,6 +219,33 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (state.screen === "gameover") {
+    if (state.pendingLeaderboardEntry) {
+      if (event.code === "ArrowLeft") {
+        moveLeaderboardLetterIndex(-1);
+        return;
+      }
+      if (event.code === "ArrowRight") {
+        moveLeaderboardLetterIndex(1);
+        return;
+      }
+      if (event.code === "ArrowUp") {
+        cycleLeaderboardLetter(1);
+        return;
+      }
+      if (event.code === "ArrowDown") {
+        cycleLeaderboardLetter(-1);
+        return;
+      }
+      if (event.code === "Enter" || event.code === "Space") {
+        saveLeaderboardInitials();
+        return;
+      }
+      if (event.code === "Escape" || event.code === "KeyB") {
+        state.pendingLeaderboardEntry = false;
+        showGameOver();
+        return;
+      }
+    }
     handleGameOverKey(event.code);
   }
 });
@@ -242,6 +282,11 @@ overlay.addEventListener("pointerdown", (event) => {
     window.location.href = HOME_URL;
   } else if (action === "close-help") {
     closeHelp();
+  } else if (action === "save-leaderboard") {
+    saveLeaderboardInitials();
+  } else if (action === "skip-leaderboard") {
+    state.pendingLeaderboardEntry = false;
+    showGameOver();
   }
 });
 
@@ -794,6 +839,8 @@ function showIntro() {
             <span class="stakers-mode-title">${mode.label}</span>
             <span class="stakers-mode-copy">${mode.copy}</span>
             <span class="stakers-mode-tag">${mode.badge}</span>
+            <span class="stakers-mode-subtitle">Leaderboard</span>
+            ${renderLeaderboard(mode.key)}
           </button>
         `
       ).join("")}
@@ -844,6 +891,20 @@ function showGameOver() {
   state.screen = "gameover";
   state.roundEnded = true;
   overlay.classList.remove("is-hidden");
+  if (state.pendingLeaderboardEntry) {
+    overlayCard.innerHTML = `
+      <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
+      <h2 class="stakers-overlay-title">New High Score</h2>
+      <p class="stakers-overlay-copy stakers-overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
+      <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
+      <div class="stakers-overlay-actions">
+        <button class="stakers-button" type="button" data-action="save-leaderboard">Save Score</button>
+        <button class="stakers-button stakers-button--ghost" type="button" data-action="skip-leaderboard">Skip</button>
+      </div>
+      <div class="stakers-overlay-hint">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
+    `;
+    return;
+  }
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
     <h2 class="stakers-overlay-title">Round Complete</h2>
@@ -853,6 +914,7 @@ function showGameOver() {
       <div class="stakers-result-box"><span class="stakers-result-value">${state.activeMode.shortLabel}</span><span class="stakers-result-label">Mode</span></div>
       <div class="stakers-result-box"><span class="stakers-result-value">${state.player.shield}</span><span class="stakers-result-label">Shield</span></div>
     </div>
+    ${renderLeaderboard(state.activeMode.key)}
     <p class="stakers-overlay-copy">${state.endReason}</p>
     <div class="stakers-overlay-actions">
       <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Game Mode</button>
@@ -886,9 +948,15 @@ function startGame(mode) {
   state.enemyBullets.length = 0;
   state.effects.length = 0;
   state.endReason = "";
+  state.bestBeforeRun = getHighScore(mode.key);
+  state.pendingLeaderboardEntry = false;
   state.pauseStartedAt = 0;
   ui.pauseIndex = 0;
   ui.endIndex = 0;
+  leaderboardState.mode = null;
+  leaderboardState.score = 0;
+  leaderboardState.letters = ["A", "A", "A", "A", "A"];
+  leaderboardState.index = 0;
   buildLevel(1);
   queueMessage(mode.badge);
   overlay.classList.add("is-hidden");
@@ -966,6 +1034,16 @@ function endRound(reason) {
   if (state.roundEnded) return;
   state.roundEnded = true;
   state.endReason = reason;
+  if (state.score > getHighScore(state.activeMode.key)) {
+    setHighScore(state.score, state.activeMode.key);
+    if (state.score > state.bestBeforeRun) {
+      state.pendingLeaderboardEntry = true;
+      leaderboardState.mode = state.activeMode.key;
+      leaderboardState.score = state.score;
+      leaderboardState.letters = ["A", "A", "A", "A", "A"];
+      leaderboardState.index = 0;
+    }
+  }
   audio.fail();
   showGameOver();
   updateHud(true);
@@ -1088,6 +1166,16 @@ function pollGamepad() {
   }
 
   if (state.screen === "gameover") {
+    if (state.pendingLeaderboardEntry) {
+      if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
+      if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
+      if (primaryPressed || startPressed) saveLeaderboardInitials();
+      if (backPressed) {
+        state.pendingLeaderboardEntry = false;
+        showGameOver();
+      }
+      return;
+    }
     if (leftPressed) {
       ui.endIndex = 0;
       showGameOver();
@@ -1126,6 +1214,120 @@ function pollGamepad() {
   }
 
   if (primaryPressed || startPressed) startGame(MODES[ui.selectedMode]);
+}
+
+function createStorage() {
+  return {
+    get(key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    set(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {
+        return null;
+      }
+      return value;
+    },
+  };
+}
+
+function getHighScore(modeKey = state.activeMode.key) {
+  const mode = MODES.find((entry) => entry.key === modeKey);
+  return Number.parseInt(storage.get(mode?.highScoreKey || "") || "0", 10) || 0;
+}
+
+function setHighScore(score, modeKey = state.activeMode.key) {
+  const mode = MODES.find((entry) => entry.key === modeKey);
+  if (mode) storage.set(mode.highScoreKey, String(score));
+}
+
+function getLeaderboard(modeKey = state.activeMode.key) {
+  const mode = MODES.find((entry) => entry.key === modeKey);
+  if (!mode) return [];
+  try {
+    const raw = storage.get(mode.leaderboardKey);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLeaderboard(entries, modeKey = state.activeMode.key) {
+  const mode = MODES.find((entry) => entry.key === modeKey);
+  if (mode) storage.set(mode.leaderboardKey, JSON.stringify(entries));
+}
+
+function addLeaderboardEntry(id, score, modeKey = state.activeMode.key) {
+  const entries = getLeaderboard(modeKey);
+  entries.push({
+    id: id.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5).padEnd(5, "X"),
+    score,
+    createdAt: Date.now(),
+  });
+  entries.sort((a, b) => b.score - a.score || a.createdAt - b.createdAt);
+  saveLeaderboard(entries.slice(0, 12), modeKey);
+}
+
+function renderLeaderboard(modeKey) {
+  const entries = getLeaderboard(modeKey).slice(0, 5);
+  if (!entries.length) {
+    return `<div class="leaderboard-empty">No scores recorded.</div>`;
+  }
+  return `
+    <div class="leaderboard">
+      ${entries
+        .map(
+          (entry, index) => `
+            <div class="leaderboard-row">
+              <span>${index + 1}. ${entry.id}</span>
+              <span>${entry.score}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderLeaderboardPicker() {
+  return leaderboardState.letters
+    .map(
+      (letter, index) =>
+        `<div class="entry-slot ${leaderboardState.index === index ? "is-selected" : ""}">${letter}</div>`
+    )
+    .join("");
+}
+
+function refreshLeaderboardPicker() {
+  const picker = overlayCard.querySelector("[data-entry-picker]");
+  if (picker) picker.innerHTML = renderLeaderboardPicker();
+}
+
+function moveLeaderboardLetterIndex(direction) {
+  leaderboardState.index =
+    (leaderboardState.index + direction + leaderboardState.letters.length) % leaderboardState.letters.length;
+  refreshLeaderboardPicker();
+}
+
+function cycleLeaderboardLetter(direction) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const current = leaderboardState.letters[leaderboardState.index];
+  const currentIndex = Math.max(0, alphabet.indexOf(current));
+  const nextIndex = (currentIndex + direction + alphabet.length) % alphabet.length;
+  leaderboardState.letters[leaderboardState.index] = alphabet[nextIndex];
+  refreshLeaderboardPicker();
+}
+
+function saveLeaderboardInitials() {
+  addLeaderboardEntry(leaderboardState.letters.join(""), leaderboardState.score, leaderboardState.mode || state.activeMode.key);
+  state.pendingLeaderboardEntry = false;
+  showGameOver();
 }
 
 function getRawMove() {

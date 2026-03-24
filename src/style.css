@@ -216,6 +216,13 @@ canvas {
   color: #9ee3ff;
 }
 
+.stakers-mode-subtitle {
+  color: #9bb5d8;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .stakers-button {
   padding: 16px 22px;
   font-size: 22px;
@@ -246,6 +253,10 @@ canvas {
   gap: 14px;
 }
 
+.stakers-overlay-copy--compact {
+  font-size: 20px;
+}
+
 .stakers-results-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -271,6 +282,52 @@ canvas {
   font-size: 14px;
   letter-spacing: 0.12em;
   color: #9bb5d8;
+}
+
+.leaderboard {
+  display: grid;
+  gap: 6px;
+}
+
+.leaderboard-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #f2f8ff;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.leaderboard-empty {
+  color: #9bb5d8;
+  font-size: 13px;
+}
+
+.entry-picker {
+  display: flex;
+  gap: 10px;
+}
+
+.entry-slot {
+  width: 58px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid rgba(104, 134, 176, 0.82);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f7fbff;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 28px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.entry-slot.is-selected {
+  border-color: #9ee3ff;
+  box-shadow: 0 0 0 2px rgba(158, 227, 255, 0.12);
 }
 
 .stakers-footer {

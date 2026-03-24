@@ -124,6 +124,19 @@ const EXTRA_PASSAGES = [
   [22, 17],
 ];
 
+const MODE_CONFIG = {
+  regular: {
+    label: "Regular Staking",
+    highScoreKey: "stake-man-high-score-regular",
+    leaderboardKey: "stake-man-leaderboard-regular",
+  },
+  liquid: {
+    label: "Liquid Staking (Lido)",
+    highScoreKey: "stake-man-high-score-liquid",
+    leaderboardKey: "stake-man-leaderboard-liquid",
+  },
+};
+
 const state = {
   phase: "intro",
   running: false,
@@ -151,9 +164,18 @@ const state = {
   menuIndex: 0,
   menuOptions: [],
   previousPhase: null,
+  bestBeforeRun: 0,
+  pendingLeaderboardEntry: false,
 };
 
 const audio = { ctx: null, master: null, timer: null, step: 0 };
+const storage = createStorage();
+const leaderboardState = {
+  mode: null,
+  score: 0,
+  letters: ["A", "A", "A", "A", "A"],
+  index: 0,
+};
 
 function copyMap() {
   return BASE_MAP.map((r) => r.split(""));
@@ -207,42 +229,74 @@ function showIntroScreen() {
 function showDifficultyScreen() {
   state.phase = "select";
   state.running = false;
-  showOverlay(
-    "Select Game Mode",
-    [
-      "L or move left: Regular Staking - queue delay before chomping ETH.",
-      "R or move right: Liquid Staking (Lido) - chomp from the outset.",
-    ],
-    "Press L or R to start. Press B to go back.",
-    "choice",
-  );
+  overlay.innerHTML = `
+    <div class="overlay-card tone-choice overlay-card--wide">
+      <h2>Select Game Mode</h2>
+      <div class="mode-select-grid">
+        <div class="mode-select-card">
+          <h3>Regular Staking</h3>
+          <p>L or move left: queue delay before chomping ETH.</p>
+          <div class="mode-select-subtitle">Leaderboard</div>
+          ${renderLeaderboard("regular")}
+        </div>
+        <div class="mode-select-card">
+          <h3>Liquid Staking (Lido)</h3>
+          <p>R or move right: chomp from the outset.</p>
+          <div class="mode-select-subtitle">Leaderboard</div>
+          ${renderLeaderboard("liquid")}
+        </div>
+      </div>
+      <div class="overlay-footer">Press L or R to start. Press B to go back.</div>
+    </div>
+  `;
+  overlay.classList.add("show");
   updateHUD();
 }
 
 function showEndScreen(kind) {
   state.phase = kind;
   state.running = false;
-  if (kind === "win") {
-    showOverlay(
-      "All ETH Chomped",
-      [
-        `Final score: ${state.score.toFixed(1)}`,
-        "Stake-Man cleared the maze.",
-      ],
-      "Press A or B for game mode. Start or Select opens menu.",
-      "success",
-    );
-  } else {
-    showOverlay(
-      "Liquidated by Pursuers",
-      [
-        `Final score: ${state.score.toFixed(1)}`,
-        "Try a new run with better pathing.",
-      ],
-      "Press A or B for game mode. Start or Select opens menu.",
-      "danger",
-    );
+  if (state.pendingLeaderboardEntry) {
+    overlay.innerHTML = `
+      <div class="overlay-card tone-success">
+        <h2>New High Score</h2>
+        <div class="overlay-lines"><p>Enter your five-letter ID for the leaderboard.</p></div>
+        <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
+        <div class="overlay-footer">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
+      </div>
+    `;
+    overlay.classList.add("show");
+    updateHUD();
+    return;
   }
+  if (kind === "win") {
+    overlay.innerHTML = `
+      <div class="overlay-card tone-success">
+        <h2>All ETH Chomped</h2>
+        <div class="overlay-lines">
+          <p>Final score: ${state.score.toFixed(1)}</p>
+          <p>Stake-Man cleared the maze.</p>
+        </div>
+        <div class="mode-select-subtitle">Leaderboard</div>
+        ${renderLeaderboard(state.mode)}
+        <div class="overlay-footer">Press A or B for game mode. Start or Select opens menu.</div>
+      </div>
+    `;
+  } else {
+    overlay.innerHTML = `
+      <div class="overlay-card tone-danger">
+        <h2>Liquidated by Pursuers</h2>
+        <div class="overlay-lines">
+          <p>Final score: ${state.score.toFixed(1)}</p>
+          <p>Try a new run with better pathing.</p>
+        </div>
+        <div class="mode-select-subtitle">Leaderboard</div>
+        ${renderLeaderboard(state.mode)}
+        <div class="overlay-footer">Press A or B for game mode. Start or Select opens menu.</div>
+      </div>
+    `;
+  }
+  overlay.classList.add("show");
   updateHUD();
 }
 
@@ -379,7 +433,7 @@ function resetBoard(resetScore = true) {
 
 function updateHUD(now = performance.now()) {
   if (state.phase === "intro" || state.phase === "select") {
-    modeBadge.textContent = "MODE: SELECT DIFFICULTY";
+    modeBadge.textContent = "MODE: SELECT GAME MODE";
     queueBadge.textContent = "QUEUE: --";
     queueBadge.classList.remove("is-active");
   } else {
@@ -627,7 +681,7 @@ function eatPellet() {
     blip(220, 0.1, 0.12, "sawtooth");
   }
 
-  if (state.pellets <= 0) showEndScreen("win");
+  if (state.pellets <= 0) finishRound("win");
   updateHUD();
 }
 
@@ -748,7 +802,7 @@ function checkHits(now) {
     updateHUD();
 
     if (state.lives <= 0) {
-      showEndScreen("gameover");
+      finishRound("gameover");
       return;
     }
 
@@ -760,8 +814,28 @@ function checkHits(now) {
   }
 }
 
+function finishRound(kind) {
+  if (state.score > getHighScore(state.mode)) {
+    setHighScore(state.score, state.mode);
+    if (state.score > state.bestBeforeRun) {
+      state.pendingLeaderboardEntry = true;
+      leaderboardState.mode = state.mode;
+      leaderboardState.score = state.score;
+      leaderboardState.letters = ["A", "A", "A", "A", "A"];
+      leaderboardState.index = 0;
+    }
+  }
+  showEndScreen(kind);
+}
+
 function startRound(mode) {
   state.mode = mode;
+  state.bestBeforeRun = getHighScore(mode);
+  state.pendingLeaderboardEntry = false;
+  leaderboardState.mode = null;
+  leaderboardState.score = 0;
+  leaderboardState.letters = ["A", "A", "A", "A", "A"];
+  leaderboardState.index = 0;
   resetBoard(true);
 }
 
@@ -859,6 +933,17 @@ function pollGamepad() {
   }
 
   if (state.phase === "win" || state.phase === "gameover") {
+    if (state.pendingLeaderboardEntry) {
+      if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
+      if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
+      if (primaryPressed) saveLeaderboardInitials();
+      if (backPressed) {
+        state.pendingLeaderboardEntry = false;
+        showEndScreen(state.phase);
+      }
+      if (resetPressed) openGameMenu();
+      return;
+    }
     if (primaryPressed || backPressed) showDifficultyScreen();
     if (resetPressed) openGameMenu();
     return;
@@ -911,6 +996,114 @@ function ensureAudio() {
   audio.master = audio.ctx.createGain();
   audio.master.gain.value = state.muted ? 0 : 0.24;
   audio.master.connect(audio.ctx.destination);
+}
+
+function createStorage() {
+  return {
+    get(key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    set(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {
+        return null;
+      }
+      return value;
+    },
+  };
+}
+
+function getHighScore(mode = state.mode || "regular") {
+  const config = MODE_CONFIG[mode];
+  return Number(storage.get(config.highScoreKey) || "0") || 0;
+}
+
+function setHighScore(score, mode = state.mode || "regular") {
+  storage.set(MODE_CONFIG[mode].highScoreKey, String(score));
+}
+
+function getLeaderboard(mode = state.mode || "regular") {
+  try {
+    const raw = storage.get(MODE_CONFIG[mode].leaderboardKey);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLeaderboard(entries, mode = state.mode || "regular") {
+  storage.set(MODE_CONFIG[mode].leaderboardKey, JSON.stringify(entries));
+}
+
+function addLeaderboardEntry(id, score, mode = state.mode || "regular") {
+  const entries = getLeaderboard(mode);
+  entries.push({
+    id: id.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5).padEnd(5, "X"),
+    score,
+    createdAt: Date.now(),
+  });
+  entries.sort((a, b) => b.score - a.score || a.createdAt - b.createdAt);
+  saveLeaderboard(entries.slice(0, 12), mode);
+}
+
+function renderLeaderboard(mode) {
+  const entries = getLeaderboard(mode).slice(0, 5);
+  if (!entries.length) return `<div class="leaderboard-empty">No scores recorded.</div>`;
+  return `
+    <div class="leaderboard">
+      ${entries
+        .map(
+          (entry, index) => `
+            <div class="leaderboard-row">
+              <span>${index + 1}. ${entry.id}</span>
+              <span>${entry.score.toFixed(1)}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderLeaderboardPicker() {
+  return leaderboardState.letters
+    .map(
+      (letter, index) =>
+        `<div class="entry-slot ${leaderboardState.index === index ? "is-selected" : ""}">${letter}</div>`
+    )
+    .join("");
+}
+
+function refreshLeaderboardPicker() {
+  const picker = overlay.querySelector("[data-entry-picker]");
+  if (picker) picker.innerHTML = renderLeaderboardPicker();
+}
+
+function moveLeaderboardLetterIndex(direction) {
+  leaderboardState.index =
+    (leaderboardState.index + direction + leaderboardState.letters.length) % leaderboardState.letters.length;
+  refreshLeaderboardPicker();
+}
+
+function cycleLeaderboardLetter(direction) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const current = leaderboardState.letters[leaderboardState.index];
+  const currentIndex = Math.max(0, alphabet.indexOf(current));
+  const nextIndex = (currentIndex + direction + alphabet.length) % alphabet.length;
+  leaderboardState.letters[leaderboardState.index] = alphabet[nextIndex];
+  refreshLeaderboardPicker();
+}
+
+function saveLeaderboardInitials() {
+  addLeaderboardEntry(leaderboardState.letters.join(""), leaderboardState.score, leaderboardState.mode || state.mode);
+  state.pendingLeaderboardEntry = false;
+  showEndScreen(state.phase);
 }
 
 function blip(freq = 440, gain = 0.06, dur = 0.08, type = "square") {
@@ -976,6 +1169,19 @@ window.addEventListener("keydown", (e) => {
   if (key === "m") {
     state.muted = !state.muted;
     if (audio.master) audio.master.gain.value = state.muted ? 0 : 0.24;
+  }
+
+  if ((state.phase === "win" || state.phase === "gameover") && state.pendingLeaderboardEntry) {
+    if (key === "arrowleft" || key === "a") moveLeaderboardLetterIndex(-1);
+    if (key === "arrowright" || key === "d") moveLeaderboardLetterIndex(1);
+    if (key === "arrowup" || key === "w") cycleLeaderboardLetter(1);
+    if (key === "arrowdown" || key === "s") cycleLeaderboardLetter(-1);
+    if (key === " " || key === "enter") saveLeaderboardInitials();
+    if (key === "escape" || key === "b") {
+      state.pendingLeaderboardEntry = false;
+      showEndScreen(state.phase);
+    }
+    return;
   }
 
   if (state.phase === "intro") {

@@ -37,6 +37,7 @@ const MODES = {
   vanilla: {
     key: "vanilla",
     label: "Vanilla Staking",
+    stakeLabel: "Stake",
     bond: "32 ETH",
     apr: "2.75%",
     hint: "Space / Up / click / tap flap.",
@@ -44,6 +45,7 @@ const MODES = {
   csm: {
     key: "csm",
     label: "CSM ICS Mode",
+    stakeLabel: "Bond",
     bond: "1.5 ETH",
     apr: "5.87%",
     hint: "Space / Up jump.",
@@ -156,7 +158,7 @@ app.innerHTML = `
         <div class="hud">
           <div class="hud-row">
             <div class="hud-chip"><span class="hud-label">Mode</span><span class="hud-value" data-hud="mode">Vanilla Staking</span></div>
-            <div class="hud-chip"><span class="hud-label">Bond</span><span class="hud-value" data-hud="bond">32 ETH</span></div>
+            <div class="hud-chip"><span class="hud-label" data-hud-label="bond">Stake</span><span class="hud-value" data-hud="bond">32 ETH</span></div>
             <div class="hud-chip"><span class="hud-label">APR</span><span class="hud-value" data-hud="apr">2.75%</span></div>
             <div class="hud-chip"><span class="hud-label">Fork</span><span class="hud-value" data-hud="fork">Merge</span></div>
             <div class="hud-chip"><span class="hud-label">Slot</span><span class="hud-value" data-hud="slot">14,001,034</span></div>
@@ -200,6 +202,7 @@ const broadcastText = document.querySelector("[data-broadcast-text]");
 const phaseTint = document.querySelector("[data-phase-tint]");
 
 const hud = {
+  bondLabel: document.querySelector('[data-hud-label="bond"]'),
   mode: document.querySelector('[data-hud="mode"]'),
   bond: document.querySelector('[data-hud="bond"]'),
   apr: document.querySelector('[data-hud="apr"]'),
@@ -233,7 +236,7 @@ const game = {
     player: { x: RUNNER.playerX, y: RUNNER.groundY, vy: 0, tilt: 0, onGround: true },
   },
   particles: [],
-  hudState: { mode: "", bond: "", apr: "", fork: "", slot: "", highScore: "" },
+  hudState: { mode: "", bondLabel: "", bond: "", apr: "", fork: "", slot: "", highScore: "" },
   inputCooldownUntil: performance.now() + INPUT_COOLDOWN_MS,
 };
 
@@ -908,7 +911,7 @@ function showTitle() {
     <div class="mode-grid">
       <button class="mode-card ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="vanilla">
         <span class="mode-card-title">Vanilla Staking</span>
-        <span class="mode-card-metric">Bond: 32 ETH</span>
+        <span class="mode-card-metric">Stake: 32 ETH</span>
         <span class="mode-card-metric">APR: 2.75%</span>
         <span class="mode-card-copy">Stake 32 ETH to become a vanilla ETH staker. Earn an estimated 2.75% APR.</span>
       </button>
@@ -1117,12 +1120,14 @@ function updateHud() {
   const mode = getModeConfig();
   const nextState = {
     mode: mode.label,
+    bondLabel: mode.stakeLabel,
     bond: mode.bond,
     apr: mode.apr,
     fork: PHASES[game.phaseIndex].short,
     slot: formatSlot(SLOT_BASE + game.slotsCleared),
     highScore: formatSlot(SLOT_BASE + getHighScore()),
   };
+  if (game.hudState.bondLabel !== nextState.bondLabel) hud.bondLabel.textContent = nextState.bondLabel;
   if (game.hudState.mode !== nextState.mode) hud.mode.textContent = nextState.mode;
   if (game.hudState.bond !== nextState.bond) hud.bond.textContent = nextState.bond;
   if (game.hudState.apr !== nextState.apr) hud.apr.textContent = nextState.apr;
@@ -1492,109 +1497,64 @@ function roundRect(context, x, y, width, height, radius) {
 
 function drawValidatorUnit(context, phase, config) {
   const { width, height, cableLift, detailScale } = config;
-  const bodyHeight = height * 0.48;
-  const topHeight = height * 0.34;
-  const frontY = height * 0.08;
   const left = -width * 0.5;
-  const topLeftX = left + width * 0.1;
-  const topRightX = left + width * 0.82;
-  const lidTopY = -height * 0.42;
-  const lidBottomY = lidTopY + topHeight;
-  const frontBottomY = frontY + bodyHeight;
+  const top = -height * 0.5;
+  const lidHeight = height * 0.28;
+  const bodyY = top + lidHeight - 2;
+  const bodyHeight = height * 0.5;
+  const cableY = bodyY + bodyHeight * 0.54;
 
   context.lineWidth = 2;
-  context.strokeStyle = "rgba(12, 17, 24, 0.75)";
+  context.strokeStyle = "rgba(12, 17, 24, 0.78)";
 
-  context.beginPath();
-  context.moveTo(topLeftX, lidTopY);
-  context.lineTo(topRightX, lidTopY);
-  context.lineTo(left + width * 0.54, lidBottomY);
-  context.lineTo(left - width * 0.18, lidBottomY);
-  context.closePath();
+  roundRect(context, left, bodyY, width, bodyHeight, 14);
+  context.fillStyle = "#1c2430";
+  context.fill();
+  context.stroke();
+
+  roundRect(context, left + width * 0.06, top, width * 0.88, lidHeight, 12);
   context.fillStyle = "#f3f6fa";
   context.fill();
   context.stroke();
 
+  context.strokeStyle = "rgba(255, 255, 255, 0.5)";
   context.beginPath();
-  context.moveTo(left - width * 0.18, lidBottomY);
-  context.lineTo(left + width * 0.54, lidBottomY);
-  context.lineTo(left + width * 0.54, frontY);
-  context.lineTo(left - width * 0.18, frontY);
-  context.closePath();
-  context.fillStyle = "#1d2432";
-  context.fill();
+  context.moveTo(left + width * 0.14, bodyY - 2);
+  context.lineTo(left + width * 0.86, bodyY - 2);
   context.stroke();
 
-  context.beginPath();
-  context.moveTo(left + width * 0.54, lidBottomY);
-  context.lineTo(topRightX, lidTopY);
-  context.lineTo(topRightX, frontY - topHeight * 0.12);
-  context.lineTo(left + width * 0.54, frontY);
-  context.closePath();
-  context.fillStyle = "#242c3b";
-  context.fill();
-  context.stroke();
-
-  context.strokeStyle = "rgba(255, 255, 255, 0.45)";
-  context.beginPath();
-  context.moveTo(topLeftX + 4, lidBottomY - 2);
-  context.lineTo(left + width * 0.5, lidBottomY - 2);
-  context.stroke();
-
-  context.fillStyle = "#10151d";
-  for (let row = 0; row < 4; row += 1) {
-    for (let col = 0; col < 8; col += 1) {
-      context.beginPath();
-      context.arc(left - width * 0.04 + col * 7 * detailScale, frontY + 10 + row * 7 * detailScale, 1.8 * detailScale, 0, Math.PI * 2);
-      context.fill();
-    }
-  }
-
-  context.fillStyle = "#f8fbff";
-  context.fillRect(left + width * 0.2, frontY + 18 * detailScale, 16 * detailScale, 14 * detailScale);
-  context.fillRect(left + width * 0.42, frontY + 18 * detailScale, 16 * detailScale, 14 * detailScale);
-  context.fillStyle = "#141b23";
-  context.fillRect(left + width * 0.23, frontY + 21 * detailScale, 10 * detailScale, 8 * detailScale);
-  context.fillRect(left + width * 0.45, frontY + 21 * detailScale, 10 * detailScale, 8 * detailScale);
+  context.fillStyle = "rgba(16, 22, 30, 0.82)";
+  context.font = `bold ${Math.max(9, Math.round(12 * detailScale))}px "IBM Plex Sans", sans-serif`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("VALIDATOR", 0, top + lidHeight * 0.52);
 
   context.fillStyle = "#7dd8ae";
-  context.fillRect(left + width * 0.12, frontY + 22 * detailScale, 6 * detailScale, 14 * detailScale);
-  context.fillStyle = "#b4ff66";
-  context.fillRect(left + width * 0.12, frontY + 40 * detailScale, 6 * detailScale, 4 * detailScale);
-  context.fillStyle = "#f3b54d";
-  context.fillRect(left + width * 0.64, frontY + 16 * detailScale, 10 * detailScale, 10 * detailScale);
+  roundRect(context, left + width * 0.14, bodyY + bodyHeight * 0.28, 10 * detailScale, 14 * detailScale, 3);
+  context.fill();
+  context.fillStyle = "#dbe6f0";
+  roundRect(context, left + width * 0.32, bodyY + bodyHeight * 0.28, 17 * detailScale, 14 * detailScale, 3);
+  context.fill();
+  roundRect(context, left + width * 0.56, bodyY + bodyHeight * 0.28, 17 * detailScale, 14 * detailScale, 3);
+  context.fill();
 
-  context.strokeStyle = "rgba(12, 17, 24, 0.8)";
-  context.lineWidth = 3;
+  context.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  context.lineWidth = 4;
+  context.lineCap = "round";
+
   context.beginPath();
-  context.moveTo(left + width * 0.5, frontY + 26 * detailScale);
-  context.bezierCurveTo(left + width * 0.74, frontY + 50, left + width * 0.84, frontBottomY + cableLift, left + width * 0.64, frontBottomY + cableLift);
+  context.moveTo(left + width * 0.04, cableY);
+  context.bezierCurveTo(left - width * 0.08, cableY + 4, left - width * 0.08, cableY + cableLift, left + width * 0.02, cableY + cableLift);
   context.stroke();
+
   context.beginPath();
-  context.moveTo(left - width * 0.08, frontBottomY - 6);
-  context.bezierCurveTo(left - width * 0.24, frontBottomY + 10, left - width * 0.32, frontBottomY + 18, left - width * 0.16, frontBottomY + cableLift + 8);
+  context.moveTo(left + width * 0.96, cableY);
+  context.bezierCurveTo(left + width * 1.08, cableY + 4, left + width * 1.08, cableY + cableLift, left + width * 0.98, cableY + cableLift);
   context.stroke();
 
-  context.fillStyle = "#111722";
-  context.fillRect(left + width * 0.6, frontBottomY + cableLift - 3, 10, 6);
-  context.fillRect(left - width * 0.2, frontBottomY + cableLift + 5, 10, 6);
-
-  context.fillStyle = "rgba(12, 17, 24, 0.78)";
-  context.font = `${Math.max(8, Math.round(10 * detailScale))}px "IBM Plex Sans", sans-serif`;
-  context.textAlign = "center";
-  context.fillText("ETH VALIDATOR", left + width * 0.24, lidTopY + topHeight * 0.5);
-
-  context.strokeStyle = phase.accent;
-  context.lineWidth = 1.5;
-  context.beginPath();
-  context.moveTo(left + width * 0.18, lidTopY + 12);
-  context.lineTo(left + width * 0.3, lidTopY + 22);
-  context.lineTo(left + width * 0.36, lidTopY + 16);
-  context.lineTo(left + width * 0.5, lidTopY + 26);
-  context.lineTo(left + width * 0.42, lidTopY + 36);
-  context.lineTo(left + width * 0.24, lidTopY + 30);
-  context.closePath();
-  context.stroke();
+  context.fillStyle = phase.accent;
+  roundRect(context, left + width * 0.42, bodyY + bodyHeight * 0.22, 8 * detailScale, 8 * detailScale, 2);
+  context.fill();
 }
 
 function createRenderCache() {

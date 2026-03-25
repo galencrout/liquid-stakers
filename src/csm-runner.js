@@ -152,6 +152,7 @@ app.innerHTML = `
       </div>
       <section class="runner-stage">
         <canvas class="runner-canvas" width="${WIDTH}" height="${HEIGHT}" aria-label="Staking game"></canvas>
+        <div class="phase-tint" data-phase-tint aria-hidden="true"></div>
         <div class="hud">
           <div class="hud-row">
             <div class="hud-chip"><span class="hud-label">Mode</span><span class="hud-value" data-hud="mode">Vanilla Staking</span></div>
@@ -196,6 +197,7 @@ const phaseTitle = document.querySelector("[data-phase-title]");
 const hintEl = document.querySelector("[data-hint]");
 const broadcastFlash = document.querySelector("[data-broadcast-flash]");
 const broadcastText = document.querySelector("[data-broadcast-text]");
+const phaseTint = document.querySelector("[data-phase-tint]");
 
 const hud = {
   mode: document.querySelector('[data-hud="mode"]'),
@@ -580,37 +582,125 @@ function pollGamepad() {
 
 function createAudio() {
   let context = null;
+  let master = null;
+  let musicGain = null;
+  let musicTimer = 0;
+  let musicStep = 0;
+  let musicPlaying = false;
+
+  const MUSIC_PATTERN = [
+    { bass: 110, lead: 440, hold: 0.18 },
+    { bass: 110, lead: 554.37, hold: 0.18 },
+    { bass: 146.83, lead: 659.25, hold: 0.18 },
+    { bass: 146.83, lead: 554.37, hold: 0.18 },
+    { bass: 164.81, lead: 587.33, hold: 0.18 },
+    { bass: 164.81, lead: 698.46, hold: 0.18 },
+    { bass: 146.83, lead: 659.25, hold: 0.18 },
+    { bass: 123.47, lead: 493.88, hold: 0.18 },
+  ];
+
   function ensure() {
     if (!context) {
       const Ctor = window.AudioContext || window.webkitAudioContext;
       if (!Ctor) return null;
       context = new Ctor();
+      master = context.createGain();
+      master.gain.value = 0.92;
+      master.connect(context.destination);
+      musicGain = context.createGain();
+      musicGain.gain.value = 0.11;
+      musicGain.connect(master);
     }
     if (context.state === "suspended") {
       context.resume().catch(() => {});
     }
     return context;
   }
-  function tone(frequency, duration, type = "sine", gainValue = 0.02) {
+  function tone(frequency, duration, type = "sine", gainValue = 0.02, detune = 0) {
     const ctxRef = ensure();
-    if (!ctxRef) return;
+    if (!ctxRef || !master) return;
     const osc = ctxRef.createOscillator();
     const gain = ctxRef.createGain();
     osc.type = type;
     osc.frequency.value = frequency;
-    gain.gain.setValueAtTime(gainValue, ctxRef.currentTime);
+    osc.detune.value = detune;
+    gain.gain.setValueAtTime(0.0001, ctxRef.currentTime);
+    gain.gain.linearRampToValueAtTime(gainValue, ctxRef.currentTime + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctxRef.currentTime + duration);
-    osc.connect(gain).connect(ctxRef.destination);
+    osc.connect(gain).connect(master);
     osc.start();
     osc.stop(ctxRef.currentTime + duration);
   }
+  function musicNote(frequency, when, duration, type, gainValue) {
+    if (!context || !musicGain) return;
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, when);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.linearRampToValueAtTime(gainValue, when + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    osc.connect(gain).connect(musicGain);
+    osc.start(when);
+    osc.stop(when + duration + 0.02);
+  }
+  function scheduleMusicBar() {
+    const ctxRef = ensure();
+    if (!ctxRef || !musicPlaying) return;
+    const startAt = ctxRef.currentTime + 0.03;
+    for (let index = 0; index < 8; index += 1) {
+      const step = MUSIC_PATTERN[(musicStep + index) % MUSIC_PATTERN.length];
+      const when = startAt + index * 0.24;
+      musicNote(step.bass, when, step.hold + 0.05, "square", 0.05);
+      musicNote(step.lead, when, step.hold, "triangle", 0.035);
+      if (index % 2 === 0) {
+        musicNote(step.lead * 2, when + 0.12, 0.08, "square", 0.018);
+      }
+    }
+    musicStep = (musicStep + 8) % MUSIC_PATTERN.length;
+    musicTimer = window.setTimeout(scheduleMusicBar, 1600);
+  }
+  function stopMusic() {
+    musicPlaying = false;
+    if (musicTimer) {
+      window.clearTimeout(musicTimer);
+      musicTimer = 0;
+    }
+  }
+  function startMusic() {
+    const ctxRef = ensure();
+    if (!ctxRef || musicPlaying) return;
+    stopMusic();
+    musicPlaying = true;
+    scheduleMusicBar();
+  }
   return {
-    start: () => tone(240, 0.08, "triangle"),
-    flap: () => tone(420, 0.08, "triangle", 0.016),
-    jump: () => tone(360, 0.08, "triangle", 0.016),
-    proposal: () => tone(720, 0.08, "square", 0.014),
-    phase: () => tone(520, 0.11, "triangle", 0.014),
-    fail: () => tone(120, 0.24, "sawtooth", 0.016),
+    start() {
+      tone(240, 0.16, "triangle", 0.06);
+      tone(360, 0.2, "square", 0.03);
+    },
+    flap() {
+      tone(420, 0.12, "triangle", 0.05);
+      tone(690, 0.08, "square", 0.02);
+    },
+    jump() {
+      tone(360, 0.14, "triangle", 0.055);
+      tone(540, 0.1, "square", 0.022);
+    },
+    proposal() {
+      tone(720, 0.14, "square", 0.055);
+      tone(1080, 0.12, "triangle", 0.022);
+    },
+    phase() {
+      tone(520, 0.16, "triangle", 0.05);
+      tone(780, 0.18, "square", 0.026);
+    },
+    fail() {
+      tone(120, 0.32, "sawtooth", 0.065);
+      tone(96, 0.42, "triangle", 0.032, -12);
+    },
+    startMusic,
+    stopMusic,
   };
 }
 
@@ -722,8 +812,10 @@ function startSelectedMode(mode) {
   }
 
   hideOverlay();
+  applyPhaseVisuals(PHASES[0]);
   showPhase(PHASES[0]);
   audio.start();
+  audio.startMusic();
   updateHud(true);
 }
 
@@ -768,6 +860,7 @@ function primaryAction() {
 }
 
 function showTitle() {
+  audio.stopMusic();
   overlayState.view = "title";
   armInputCooldown();
   showOverlay();
@@ -865,6 +958,7 @@ function showPauseMenu() {
   overlayState.view = "menu";
   overlayState.selectedIndex = Math.min(overlayState.selectedIndex, pauseMenuActions.length - 1);
   game.screen = "paused";
+  audio.stopMusic();
   armInputCooldown();
   showOverlay();
   overlayCard.innerHTML = `
@@ -886,6 +980,7 @@ function activatePauseMenuAction() {
     hideOverlay();
     game.screen = "playing";
     overlayState.view = "playing";
+    audio.startMusic();
     return;
   }
   if (actionName === "restart") {
@@ -949,12 +1044,20 @@ function saveLeaderboardInitials() {
 }
 
 function showPhase(phase) {
+  applyPhaseVisuals(phase);
   phaseTitle.textContent = phase.short;
   phaseBanner.classList.add("is-visible");
   if (!REDUCED_MOTION) {
     window.clearTimeout(showPhase.timer);
     showPhase.timer = window.setTimeout(() => phaseBanner.classList.remove("is-visible"), 1200);
   }
+}
+
+function applyPhaseVisuals(phase) {
+  if (!phaseTint) return;
+  phaseTint.style.setProperty("--phase-tint-top", phase.sky[0]);
+  phaseTint.style.setProperty("--phase-tint-bottom", phase.sky[1]);
+  phaseTint.style.setProperty("--phase-tint-accent", phase.accent);
 }
 
 function hideOverlay() {
@@ -1185,6 +1288,7 @@ function spawnRunnerObstacle(offset = 0) {
 }
 
 function failGame() {
+  audio.stopMusic();
   game.screen = "gameover";
   const phase = PHASES[game.phaseIndex];
   const burstX = game.activeMode === "vanilla" ? game.flappy.player.x : game.runner.player.x;

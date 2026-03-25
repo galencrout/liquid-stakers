@@ -88,10 +88,11 @@ canvas {
   background: linear-gradient(180deg, rgba(6, 11, 20, 0.9), rgba(8, 14, 24, 0.82));
   border: 1px solid rgba(91, 122, 166, 0.72);
   border-radius: 16px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   backdrop-filter: blur(4px);
+  min-width: 0;
 }
 
 .stakers-chip-label {
@@ -101,9 +102,14 @@ canvas {
 }
 
 .stakers-chip-value {
-  font-size: 16px;
+  font-size: 14px;
+  line-height: 1.15;
   font-weight: 700;
   color: #f2f8ff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stakers-overlay {
@@ -131,9 +137,9 @@ canvas {
     0 20px 50px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   border-radius: 30px;
-  padding: 28px 28px 24px;
+  padding: 24px 24px 20px;
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .stakers-overlay-kicker {
@@ -144,7 +150,7 @@ canvas {
 
 .stakers-overlay-title {
   margin: 0;
-  font-size: clamp(34px, 5vw, 46px);
+  font-size: clamp(30px, 4.4vw, 40px);
   line-height: 1.02;
   color: #f7fbff;
   overflow-wrap: anywhere;
@@ -152,13 +158,13 @@ canvas {
 
 .stakers-overlay-copy {
   margin: 0;
-  font-size: 19px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.45;
   color: #d7e9ff;
 }
 
 .stakers-overlay-hint {
-  font-size: 16px;
+  font-size: 14px;
   color: #98e6ff;
   letter-spacing: 0.03em;
 }
@@ -228,8 +234,8 @@ canvas {
 }
 
 .stakers-button {
-  padding: 16px 22px;
-  font-size: 22px;
+  padding: 14px 18px;
+  font-size: 19px;
   font-weight: 700;
 }
 
@@ -254,17 +260,17 @@ canvas {
 .stakers-overlay-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .stakers-overlay-copy--compact {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .stakers-leaderboard-panel {
   display: grid;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 8px;
+  padding: 14px 16px;
   border-radius: 20px;
   border: 1px solid rgba(82, 111, 151, 0.72);
   background: linear-gradient(180deg, rgba(10, 16, 26, 0.9), rgba(8, 13, 22, 0.9));
@@ -273,26 +279,27 @@ canvas {
 .stakers-results-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .stakers-result-box {
   background: linear-gradient(180deg, rgba(12, 18, 28, 0.95), rgba(9, 14, 23, 0.88));
   border: 1px solid rgba(72, 99, 133, 0.76);
   border-radius: 20px;
-  padding: 18px;
+  padding: 14px 16px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stakers-result-value {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
   color: #f7fbff;
+  overflow-wrap: anywhere;
 }
 
 .stakers-result-label {
-  font-size: 14px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   color: #9bb5d8;
 }
@@ -309,7 +316,7 @@ canvas {
   align-items: center;
   color: #f2f8ff;
   font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -332,7 +339,7 @@ canvas {
 
 .leaderboard-empty {
   color: #9bb5d8;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .entry-picker {

@@ -279,6 +279,7 @@ canvas {
 }
 
 .entry-slot {
+  appearance: none;
   width: 58px;
   height: 64px;
   display: grid;
@@ -291,11 +292,18 @@ canvas {
   font-size: 28px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
 .entry-slot.is-selected {
   border-color: #9ee3ff;
   box-shadow: 0 0 0 2px rgba(158, 227, 255, 0.16);
+}
+
+.entry-slot--submit {
+  width: 116px;
+  font-size: 22px;
+  letter-spacing: 0.1em;
 }
 
 @keyframes queuePulse {

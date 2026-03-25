@@ -174,6 +174,7 @@ const leaderboardState = {
   letters: ["A", "A", "A", "A", "A"],
   index: 0,
 };
+const LEADERBOARD_SUBMIT_INDEX = leaderboardState.letters.length;
 
 function copyMap() {
   return BASE_MAP.map((r) => r.split(""));
@@ -260,11 +261,7 @@ function showEndScreen(kind) {
         <h2>New High Score</h2>
         <div class="overlay-lines"><p>Enter your five-letter ID for the leaderboard.</p></div>
         <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-        <div class="overlay-actions-row">
-          <button class="overlay-button" type="button" data-action="save-leaderboard">Save Score</button>
-          <button class="overlay-button overlay-button--ghost" type="button" data-action="skip-leaderboard">Skip</button>
-        </div>
-        <div class="overlay-footer">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
+        <div class="overlay-footer">Stick left/right selects slot. Up/down changes letters. Move to ENTER and press any button to save.</div>
       </div>
     `;
     overlay.classList.add("show");
@@ -948,11 +945,7 @@ function pollGamepad() {
     if (state.pendingLeaderboardEntry) {
       if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
       if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
-      if (primaryPressed) saveLeaderboardInitials();
-      if (backPressed) {
-        state.pendingLeaderboardEntry = false;
-        showEndScreen(state.phase);
-      }
+      if (primaryPressed || backPressed) trySubmitLeaderboardEntry();
       if (resetPressed) openGameMenu();
       return;
     }
@@ -1085,12 +1078,14 @@ function renderLeaderboard(mode) {
 }
 
 function renderLeaderboardPicker() {
-  return leaderboardState.letters
+  const letters = leaderboardState.letters
     .map(
       (letter, index) =>
-        `<div class="entry-slot ${leaderboardState.index === index ? "is-selected" : ""}">${letter}</div>`
+        `<button class="entry-slot ${leaderboardState.index === index ? "is-selected" : ""}" type="button" data-action="entry-slot" data-index="${index}">${letter}</button>`
     )
     .join("");
+  const submit = `<button class="entry-slot entry-slot--submit ${leaderboardState.index === LEADERBOARD_SUBMIT_INDEX ? "is-selected" : ""}" type="button" data-action="entry-submit" data-index="${LEADERBOARD_SUBMIT_INDEX}">ENTER</button>`;
+  return `${letters}${submit}`;
 }
 
 function refreshLeaderboardPicker() {
@@ -1099,12 +1094,13 @@ function refreshLeaderboardPicker() {
 }
 
 function moveLeaderboardLetterIndex(direction) {
-  leaderboardState.index =
-    (leaderboardState.index + direction + leaderboardState.letters.length) % leaderboardState.letters.length;
+  const total = leaderboardState.letters.length + 1;
+  leaderboardState.index = (leaderboardState.index + direction + total) % total;
   refreshLeaderboardPicker();
 }
 
 function cycleLeaderboardLetter(direction) {
+  if (leaderboardState.index >= leaderboardState.letters.length) return;
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const current = leaderboardState.letters[leaderboardState.index];
   const currentIndex = Math.max(0, alphabet.indexOf(current));
@@ -1117,6 +1113,12 @@ function saveLeaderboardInitials() {
   addLeaderboardEntry(leaderboardState.letters.join(""), leaderboardState.score, leaderboardState.mode || state.mode);
   state.pendingLeaderboardEntry = false;
   showEndScreen(state.phase);
+}
+
+function trySubmitLeaderboardEntry() {
+  if (leaderboardState.index === LEADERBOARD_SUBMIT_INDEX) {
+    saveLeaderboardInitials();
+  }
 }
 
 function blip(freq = 440, gain = 0.06, dur = 0.08, type = "square") {
@@ -1189,11 +1191,7 @@ window.addEventListener("keydown", (e) => {
     if (key === "arrowright" || key === "d") moveLeaderboardLetterIndex(1);
     if (key === "arrowup" || key === "w") cycleLeaderboardLetter(1);
     if (key === "arrowdown" || key === "s") cycleLeaderboardLetter(-1);
-    if (key === " " || key === "enter") saveLeaderboardInitials();
-    if (key === "escape" || key === "b") {
-      state.pendingLeaderboardEntry = false;
-      showEndScreen(state.phase);
-    }
+    if (key === " " || key === "enter" || key === "escape" || key === "b") trySubmitLeaderboardEntry();
     return;
   }
 
@@ -1238,11 +1236,11 @@ overlay.addEventListener("pointerdown", (event) => {
   const action = event.target instanceof Element ? event.target.closest("[data-action]") : null;
   if (!action) return;
   const type = action.getAttribute("data-action");
-  if (type === "save-leaderboard") {
+  if (type === "save-leaderboard" || type === "entry-submit") {
     saveLeaderboardInitials();
-  } else if (type === "skip-leaderboard") {
-    state.pendingLeaderboardEntry = false;
-    showEndScreen(state.phase);
+  } else if (type === "entry-slot") {
+    leaderboardState.index = Number.parseInt(action.getAttribute("data-index") || "0", 10) || 0;
+    refreshLeaderboardPicker();
   }
 });
 

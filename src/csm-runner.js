@@ -245,6 +245,7 @@ const leaderboardState = {
   letters: ["A", "A", "A", "A", "A"],
   index: 0,
 };
+const LEADERBOARD_SUBMIT_INDEX = leaderboardState.letters.length;
 
 const overlayState = {
   view: "title",
@@ -278,16 +279,15 @@ window.addEventListener("keydown", (event) => {
     }
     if (event.code === "Enter") {
       event.preventDefault();
-      saveLeaderboardInitials();
+      trySubmitLeaderboardEntry();
     }
     if (event.code === "Space") {
       event.preventDefault();
-      saveLeaderboardInitials();
+      trySubmitLeaderboardEntry();
     }
     if (event.code === "Escape" || event.code === "KeyB") {
       event.preventDefault();
-      game.pendingLeaderboardEntry = false;
-      showGameOver();
+      trySubmitLeaderboardEntry();
     }
     return;
   }
@@ -403,14 +403,14 @@ overlay.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  if (actionName === "skip-score") {
-    game.pendingLeaderboardEntry = false;
-    showGameOver();
+  if (actionName === "save-score" || actionName === "entry-submit") {
+    saveLeaderboardInitials();
     return;
   }
 
-  if (actionName === "save-score") {
-    saveLeaderboardInitials();
+  if (actionName === "entry-slot") {
+    leaderboardState.index = Number.parseInt(action.getAttribute("data-index") || "0", 10) || 0;
+    refreshLeaderboardPicker();
     return;
   }
 
@@ -512,11 +512,7 @@ function pollGamepad() {
   if (game.pendingLeaderboardEntry) {
     if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState);
     if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
-    if (primaryPressed) saveLeaderboardInitials();
-    if (backPressed) {
-      game.pendingLeaderboardEntry = false;
-      showGameOver();
-    }
+    if (primaryPressed || startPressed || backPressed) trySubmitLeaderboardEntry();
     return;
   }
 
@@ -902,11 +898,7 @@ function showGameOver() {
       <h2 class="overlay-title">New High Score</h2>
       <p class="overlay-copy overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
       <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-      <div class="overlay-actions-row">
-        <button class="overlay-button" type="button" data-overlay-action="save-score">Save Score</button>
-        <button class="overlay-button overlay-button--ghost" type="button" data-overlay-action="skip-score">Skip</button>
-      </div>
-      <div class="entry-hint">Stick left/right selects slot. Up/down changes letter. A or Start saves. B skips.</div>
+      <div class="entry-hint">Stick left/right selects slot. Up/down changes letters. Move to ENTER and press any button to save.</div>
     `;
     return;
   }
@@ -1008,12 +1000,14 @@ function isInputCoolingDown() {
 }
 
 function renderLeaderboardPicker() {
-  return leaderboardState.letters
+  const letters = leaderboardState.letters
     .map(
       (letter, index) =>
-        `<div class="entry-slot ${leaderboardState.index === index ? "is-selected" : ""}">${letter}</div>`
+        `<button class="entry-slot ${leaderboardState.index === index ? "is-selected" : ""}" type="button" data-overlay-action="entry-slot" data-index="${index}">${letter}</button>`
     )
     .join("");
+  const submit = `<button class="entry-slot entry-slot--submit ${leaderboardState.index === LEADERBOARD_SUBMIT_INDEX ? "is-selected" : ""}" type="button" data-overlay-action="entry-submit" data-index="${LEADERBOARD_SUBMIT_INDEX}">ENTER</button>`;
+  return `${letters}${submit}`;
 }
 
 function refreshLeaderboardPicker() {
@@ -1024,11 +1018,13 @@ function refreshLeaderboardPicker() {
 }
 
 function moveLeaderboardLetterIndex(direction) {
-  leaderboardState.index = (leaderboardState.index + direction + leaderboardState.letters.length) % leaderboardState.letters.length;
+  const total = leaderboardState.letters.length + 1;
+  leaderboardState.index = (leaderboardState.index + direction + total) % total;
   refreshLeaderboardPicker();
 }
 
 function cycleLeaderboardLetter(direction) {
+  if (leaderboardState.index >= leaderboardState.letters.length) return;
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const current = leaderboardState.letters[leaderboardState.index];
   const currentIndex = Math.max(0, alphabet.indexOf(current));
@@ -1041,6 +1037,12 @@ function saveLeaderboardInitials() {
   addLeaderboardEntry(leaderboardState.letters.join(""), leaderboardState.score, leaderboardState.mode || game.activeMode);
   game.pendingLeaderboardEntry = false;
   showGameOver();
+}
+
+function trySubmitLeaderboardEntry() {
+  if (leaderboardState.index === LEADERBOARD_SUBMIT_INDEX) {
+    saveLeaderboardInitials();
+  }
 }
 
 function showPhase(phase) {

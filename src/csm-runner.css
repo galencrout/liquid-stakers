@@ -404,6 +404,7 @@ body,
 }
 
 .entry-slot {
+  appearance: none;
   width: 58px;
   height: 64px;
   display: grid;
@@ -416,12 +417,19 @@ body,
   font-size: 28px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
 .entry-slot.is-selected {
   border-color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 0 0 4px rgba(157, 200, 223, 0.55);
   background: rgba(255, 255, 255, 0.12);
+}
+
+.entry-slot--submit {
+  width: 116px;
+  font-size: 22px;
+  letter-spacing: 0.1em;
 }
 
 .entry-hint {

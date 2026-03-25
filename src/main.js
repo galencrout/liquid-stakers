@@ -14,6 +14,25 @@ const MAX_LEVEL = 20;
 const HOME_URL = "./index.html";
 const HIGH_SCORE_KEY = "liquid-stakers-high-score";
 const LEADERBOARD_KEY = "liquid-stakers-leaderboard";
+const MUSIC_STEP_TIME = 0.18;
+const MUSIC_PATTERN = [
+  { lead: 523.25, bass: 130.81, harmony: 392.0, accent: true },
+  { lead: 587.33, bass: 130.81, harmony: 440.0, accent: false },
+  { lead: 659.25, bass: 146.83, harmony: 493.88, accent: false },
+  { lead: 698.46, bass: 146.83, harmony: 523.25, accent: true },
+  { lead: 783.99, bass: 164.81, harmony: 587.33, accent: false },
+  { lead: 698.46, bass: 164.81, harmony: 523.25, accent: false },
+  { lead: 659.25, bass: 174.61, harmony: 493.88, accent: true },
+  { lead: 587.33, bass: 174.61, harmony: 440.0, accent: false },
+  { lead: 523.25, bass: 196.0, harmony: 392.0, accent: true },
+  { lead: 587.33, bass: 196.0, harmony: 440.0, accent: false },
+  { lead: 659.25, bass: 174.61, harmony: 493.88, accent: false },
+  { lead: 783.99, bass: 174.61, harmony: 587.33, accent: true },
+  { lead: 880.0, bass: 164.81, harmony: 659.25, accent: false },
+  { lead: 783.99, bass: 164.81, harmony: 587.33, accent: false },
+  { lead: 698.46, bass: 146.83, harmony: 523.25, accent: true },
+  { lead: 659.25, bass: 130.81, harmony: 493.88, accent: false },
+];
 
 const INTRO_STAGES = [
   {
@@ -166,6 +185,7 @@ const state = {
   hudCache: { mode: "", level: "", score: "", time: "", lag: "", status: "" },
   nextHudRefreshAt: 0,
   pauseStartedAt: 0,
+  muted: false,
 };
 
 const audio = createAudio();
@@ -192,6 +212,12 @@ window.addEventListener("keydown", (event) => {
 
   if (event.code === "KeyH" && state.screen === "playing") {
     toggleHelp();
+    return;
+  }
+
+  if (event.code === "KeyM") {
+    audio.toggleMute();
+    state.muted = audio.isMuted();
     return;
   }
 
@@ -810,6 +836,7 @@ function drawCenterMessage() {
 function showIntro() {
   state.screen = "intro";
   state.roundEnded = false;
+  overlayCard.setAttribute("data-view", "intro");
   overlay.classList.remove("is-hidden");
 
   if (ui.introStage < INTRO_STAGES.length) {
@@ -851,6 +878,7 @@ function showIntro() {
 function showPauseMenu() {
   state.screen = "pause";
   state.pauseStartedAt = performance.now();
+  overlayCard.setAttribute("data-view", "pause");
   overlay.classList.remove("is-hidden");
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
@@ -876,6 +904,7 @@ function showPauseMenu() {
 function showHelp() {
   state.screen = "help";
   state.pauseStartedAt = performance.now();
+  overlayCard.setAttribute("data-view", "help");
   overlay.classList.remove("is-hidden");
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">HELP</div>
@@ -890,6 +919,7 @@ function showGameOver() {
   state.roundEnded = true;
   overlay.classList.remove("is-hidden");
   if (state.pendingLeaderboardEntry) {
+    overlayCard.setAttribute("data-view", "entry");
     overlayCard.innerHTML = `
       <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
       <h2 class="stakers-overlay-title">New High Score</h2>
@@ -899,6 +929,7 @@ function showGameOver() {
     `;
     return;
   }
+  overlayCard.setAttribute("data-view", "results");
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
     <h2 class="stakers-overlay-title">Round Complete</h2>
@@ -959,6 +990,7 @@ function startGame(mode) {
   overlay.classList.add("is-hidden");
   footerHint.textContent = "Arcade: stick moves. A fires. Start or Select opens menu.";
   audio.start();
+  audio.startMusic();
   updateHud(true);
 }
 
@@ -1072,6 +1104,7 @@ function closeHelp() {
 function resetToIntro(modeOnly = false) {
   ui.introStage = modeOnly ? INTRO_STAGES.length : 0;
   ui.selectedMode = state.activeMode.key === "stvaults" ? 1 : 0;
+  audio.stopMusic();
   showIntro();
   updateHud(true);
 }
@@ -1080,7 +1113,10 @@ function activatePauseItem() {
   if (ui.pauseIndex === 0) resumeGame();
   else if (ui.pauseIndex === 1) startGame(state.activeMode);
   else if (ui.pauseIndex === 2) resetToIntro(true);
-  else window.location.href = HOME_URL;
+  else {
+    audio.stopMusic();
+    window.location.href = HOME_URL;
+  }
 }
 
 function updateHud(force = false) {
@@ -1465,11 +1501,21 @@ function roundRect(target, x, y, width, height, radius) {
 function createAudio() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   let context = null;
+  let musicBus = null;
+  let musicTimer = 0;
+  let musicStep = 0;
+  let musicPlaying = false;
+  let muted = false;
 
   function ensureContext() {
     if (!AudioContextClass) return null;
     if (!context) context = new AudioContextClass();
     if (context.state === "suspended") context.resume();
+    if (!musicBus) {
+      musicBus = context.createGain();
+      musicBus.gain.value = 0.12;
+      musicBus.connect(context.destination);
+    }
     return context;
   }
 
@@ -1488,10 +1534,60 @@ function createAudio() {
     oscillator.stop(ctxAudio.currentTime + duration);
   }
 
+  function musicNote(frequency, when, duration, type, volume, slide = 1) {
+    const ctxAudio = ensureContext();
+    if (!ctxAudio || !musicBus || muted) return;
+    const oscillator = ctxAudio.createOscillator();
+    const gain = ctxAudio.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, when);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, frequency * slide), when + duration);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(volume, when + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    oscillator.connect(gain).connect(musicBus);
+    oscillator.start(when);
+    oscillator.stop(when + duration + 0.02);
+  }
+
+  function scheduleMusicBar() {
+    const ctxAudio = ensureContext();
+    if (!ctxAudio || !musicPlaying || muted) return;
+    const barStart = ctxAudio.currentTime + 0.02;
+    for (let stepIndex = 0; stepIndex < 16; stepIndex += 1) {
+      const step = MUSIC_PATTERN[(musicStep + stepIndex) % MUSIC_PATTERN.length];
+      const when = barStart + stepIndex * MUSIC_STEP_TIME;
+      musicNote(step.bass, when, 0.22, "square", 0.032, 0.98);
+      musicNote(step.lead, when, 0.14, "triangle", step.accent ? 0.048 : 0.04, 1.01);
+      musicNote(step.harmony, when + 0.05, 0.1, "square", 0.014, 0.99);
+      if (stepIndex % 2 === 1) {
+        musicNote(step.lead * 0.5, when + 0.09, 0.06, "triangle", 0.012, 1.0);
+      }
+    }
+    musicStep = (musicStep + 16) % MUSIC_PATTERN.length;
+    musicTimer = window.setTimeout(scheduleMusicBar, MUSIC_STEP_TIME * 16 * 1000);
+  }
+
+  function stopMusic() {
+    musicPlaying = false;
+    if (musicTimer) {
+      window.clearTimeout(musicTimer);
+      musicTimer = 0;
+    }
+  }
+
   return {
     start() {
       ensureContext();
     },
+    startMusic() {
+      const ctxAudio = ensureContext();
+      if (!ctxAudio || musicPlaying) return;
+      musicPlaying = true;
+      musicStep = 0;
+      scheduleMusicBar();
+    },
+    stopMusic,
     shoot() {
       blip("square", 660, 0.08, 0.025, 1.5);
     },
@@ -1501,6 +1597,14 @@ function createAudio() {
     fail() {
       blip("sawtooth", 150, 0.22, 0.045, 0.45);
       setTimeout(() => blip("triangle", 92, 0.25, 0.03, 0.4), 70);
+    },
+    toggleMute() {
+      muted = !muted;
+      if (musicBus) musicBus.gain.value = muted ? 0 : 0.12;
+      return muted;
+    },
+    isMuted() {
+      return muted;
     },
   };
 }

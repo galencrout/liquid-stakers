@@ -117,7 +117,6 @@ const FLAPPY = {
   playerHeight: 76,
   startSpeed: 230,
   maxSpeed: 300,
-  speedStep: 12,
   gravity: 1080,
   flapVelocity: -365,
   pipeWidth: 116,
@@ -133,7 +132,6 @@ const RUNNER = {
   playerHeight: 90,
   startSpeed: 420,
   maxSpeed: 520,
-  speedStep: 14,
   gravity: 2400,
   jumpVelocity: -920,
   obstacleSpacing: 360,
@@ -1157,9 +1155,9 @@ function update(delta) {
   if (nextPhase !== game.phaseIndex) {
     game.phaseIndex = nextPhase;
     if (game.activeMode === "vanilla") {
-      game.flappy.speed = Math.min(FLAPPY.maxSpeed, FLAPPY.startSpeed + game.phaseIndex * FLAPPY.speedStep);
+      game.flappy.speed = Math.min(FLAPPY.maxSpeed, FLAPPY.startSpeed * 1.05 ** game.phaseIndex);
     } else {
-      game.runner.speed = Math.min(RUNNER.maxSpeed, RUNNER.startSpeed + game.phaseIndex * RUNNER.speedStep);
+      game.runner.speed = Math.min(RUNNER.maxSpeed, RUNNER.startSpeed * 1.05 ** game.phaseIndex);
     }
     showPhase(PHASES[game.phaseIndex]);
     triggerBroadcast(`${PHASES[game.phaseIndex].short.toUpperCase()} HARDFORK!`, "hardfork");

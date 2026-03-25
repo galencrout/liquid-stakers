@@ -1529,13 +1529,15 @@ function drawValidatorUnit(context, phase, config) {
   context.textBaseline = "middle";
   context.fillText("VALIDATOR", 0, top + lidHeight * 0.52);
 
-  context.fillStyle = "#7dd8ae";
-  roundRect(context, left + width * 0.14, bodyY + bodyHeight * 0.28, 10 * detailScale, 14 * detailScale, 3);
-  context.fill();
   context.fillStyle = "#dbe6f0";
-  roundRect(context, left + width * 0.32, bodyY + bodyHeight * 0.28, 17 * detailScale, 14 * detailScale, 3);
-  context.fill();
-  roundRect(context, left + width * 0.56, bodyY + bodyHeight * 0.28, 17 * detailScale, 14 * detailScale, 3);
+  roundRect(
+    context,
+    left + width * 0.36,
+    bodyY + bodyHeight * 0.24,
+    18 * detailScale,
+    28 * detailScale,
+    4
+  );
   context.fill();
 
   context.strokeStyle = "rgba(255, 255, 255, 0.92)";

@@ -685,6 +685,8 @@ function eatPellet() {
 }
 
 function stepPlayer() {
+  const previous = { x: state.player.x, y: state.player.y };
+
   if (state.nextDir && canMove(state.player.x, state.player.y, state.nextDir)) {
     state.movingDir = state.nextDir;
   }
@@ -696,6 +698,8 @@ function stepPlayer() {
     state.player.mouth += 0.8;
     eatPellet();
   }
+
+  return previous;
 }
 
 function ghostLegalDirs(g) {
@@ -766,9 +770,11 @@ function pickGhostDir(g, now) {
 
 function stepGhosts(now) {
   const frightened = now < state.frightenedEnd;
+  const previousByGhost = new Map();
 
   for (const g of state.ghosts) {
     if (g.deadUntil > now) continue;
+    previousByGhost.set(g, { x: g.x, y: g.y });
     g.frightened = frightened;
     g.dir = pickGhostDir(g, now);
 
@@ -778,12 +784,24 @@ function stepGhosts(now) {
       g.y += d.y;
     }
   }
+
+  return previousByGhost;
 }
 
-function checkHits(now) {
+function checkHits(now, previousPlayer = null, previousGhosts = null) {
   for (const g of state.ghosts) {
     if (g.deadUntil > now) continue;
-    if (g.x !== state.player.x || g.y !== state.player.y) continue;
+    const sameTile = g.x === state.player.x && g.y === state.player.y;
+    const previousGhost = previousGhosts?.get(g);
+    const crossedPaths =
+      previousPlayer &&
+      previousGhost &&
+      previousPlayer.x === g.x &&
+      previousPlayer.y === g.y &&
+      previousGhost.x === state.player.x &&
+      previousGhost.y === state.player.y;
+
+    if (!sameTile && !crossedPaths) continue;
 
     if (g.frightened) {
       state.score += GHOST_SCORE;
@@ -966,6 +984,9 @@ function gameLoop(now) {
   pollGamepad();
 
   if (state.running && state.phase === "playing") {
+    let previousPlayer = null;
+    let previousGhosts = null;
+
     if (state.mode === "regular" && !state.canCollect && now >= state.queueEnd) {
       state.canCollect = true;
       blip(520, 0.12, 0.09, "triangle");
@@ -973,15 +994,15 @@ function gameLoop(now) {
 
     if (now - state.lastStep >= STEP_MS) {
       state.lastStep = now;
-      stepPlayer();
+      previousPlayer = stepPlayer();
     }
 
     if (now - state.lastGhostStep >= GHOST_STEP_MS) {
       state.lastGhostStep = now;
-      stepGhosts(now);
+      previousGhosts = stepGhosts(now);
     }
 
-    checkHits(now);
+    checkHits(now, previousPlayer, previousGhosts);
     updateHUD(now);
   }
 

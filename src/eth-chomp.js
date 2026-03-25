@@ -135,8 +135,30 @@ const MODE_CONFIG = {
   },
 };
 
+const INTRO_STAGES = [
+  {
+    title: "Stake-Man",
+    body:
+      "Welcome to Stake-Man, a maze game about navigating Ethereum staking. Choose Regular staking or choose Liquid Staking with Lido.",
+    prompt: "Press A, Start, Space, Enter, or any arrow to continue.",
+  },
+  {
+    title: "Why It Matters",
+    body:
+      "Regular staking can hold you in the entry queue before rewards start flowing. Liquid staking changes the pace by letting you collect immediately.",
+    prompt: "Press A, Start, Space, Enter, or any arrow for rules.",
+  },
+  {
+    title: "Rules",
+    body:
+      "Chomp every ETH crystal, avoid the pursuers, and use power pellets to flip the chase. Route planning and consistency win the maze.",
+    prompt: "Press A, Start, Space, Enter, or any arrow to choose game mode.",
+  },
+];
+
 const state = {
   phase: "intro",
+  introStage: 0,
   running: false,
   map: [],
   pellets: 0,
@@ -210,19 +232,29 @@ function hideOverlay() {
 }
 
 function showIntroScreen() {
+  const stage = INTRO_STAGES[Math.max(0, Math.min(state.introStage, INTRO_STAGES.length - 1))];
   state.phase = "intro";
   state.running = false;
-  showOverlay(
-    "Stake-Man: ETH Chomp",
-    [
-      "Classic Pac-Man mechanics, ETH-themed pellets.",
-      "Regular Staking gates collection behind the entry queue.",
-      "Liquid Staking (Lido) starts collecting immediately.",
-    ],
-    "Press A or Start to continue",
-    "neutral",
-  );
+  overlay.innerHTML = `
+    <div class="overlay-card overlay-card--wide overlay-card--intro tone-neutral">
+      <div class="overlay-kicker">STAKE-MAN</div>
+      <h2 class="overlay-title">${stage.title}</h2>
+      <p class="overlay-copy">${stage.body}</p>
+      <div class="overlay-footer overlay-footer--intro">${stage.prompt}</div>
+      <button class="intro-button" type="button" data-action="intro-continue">Continue</button>
+    </div>
+  `;
+  overlay.classList.add("show");
   updateHUD();
+}
+
+function advanceIntroScreen() {
+  if (state.introStage < INTRO_STAGES.length - 1) {
+    state.introStage += 1;
+    showIntroScreen();
+    return;
+  }
+  showDifficultyScreen();
 }
 
 function showDifficultyScreen() {
@@ -934,7 +966,16 @@ function pollGamepad() {
   }
 
   if (state.phase === "intro") {
-    if (primaryPressed) showDifficultyScreen();
+    if (
+      primaryPressed ||
+      backPressed ||
+      regularPressed ||
+      liquidPressed ||
+      horizontalEdge ||
+      verticalEdge
+    ) {
+      advanceIntroScreen();
+    }
     return;
   }
 
@@ -942,7 +983,10 @@ function pollGamepad() {
     if (regularPressed || (horizontalEdge && horizontalState < 0)) handleDifficultyChoice("regular");
     if (liquidPressed || (horizontalEdge && horizontalState > 0)) handleDifficultyChoice("liquid");
     if (primaryPressed) handleDifficultyChoice(horizontalState < 0 ? "regular" : "liquid");
-    if (backPressed) showIntroScreen();
+    if (backPressed) {
+      state.introStage = INTRO_STAGES.length - 1;
+      showIntroScreen();
+    }
     return;
   }
 
@@ -1198,6 +1242,21 @@ function handleDifficultyChoice(mode) {
   startRound(mode);
 }
 
+function isIntroAdvanceKey(key) {
+  return [
+    " ",
+    "enter",
+    "arrowleft",
+    "arrowright",
+    "arrowup",
+    "arrowdown",
+    "a",
+    "d",
+    "w",
+    "s",
+  ].includes(key);
+}
+
 window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(key)) e.preventDefault();
@@ -1217,14 +1276,17 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (state.phase === "intro") {
-    if (key === " " || key === "enter") showDifficultyScreen();
+    if (isIntroAdvanceKey(key)) advanceIntroScreen();
     return;
   }
 
   if (state.phase === "select") {
     if (key === "1") handleDifficultyChoice("regular");
     if (key === "2") handleDifficultyChoice("liquid");
-    if (key === "escape" || key === "b") showIntroScreen();
+    if (key === "escape" || key === "b") {
+      state.introStage = INTRO_STAGES.length - 1;
+      showIntroScreen();
+    }
     return;
   }
 
@@ -1259,6 +1321,8 @@ overlay.addEventListener("pointerdown", (event) => {
   const type = action.getAttribute("data-action");
   if (type === "save-leaderboard" || type === "entry-submit") {
     saveLeaderboardInitials();
+  } else if (type === "intro-continue") {
+    advanceIntroScreen();
   } else if (type === "entry-slot") {
     leaderboardState.index = Number.parseInt(action.getAttribute("data-index") || "0", 10) || 0;
     refreshLeaderboardPicker();

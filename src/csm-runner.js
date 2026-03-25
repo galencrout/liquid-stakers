@@ -52,6 +52,27 @@ const MODES = {
   },
 };
 
+const INTRO_STAGES = [
+  {
+    title: "Node Runners",
+    body:
+      "Welcome to Node Runners, a game about running an Ethereum Validator from home. Choose Vanilla staking or choose Lido ICS / CSM staking.",
+    prompt: "Press any key to continue.",
+  },
+  {
+    title: "Why It Matters",
+    body:
+      "With the Lido Community Staking Module it's easy and lucrative to validate Ethereum from home. Start with only 1.5 ETH and get annual rewards of ~5.87%. Compare this with vanilla staking with a minimum entry of 32 ETH and only ~2.75% APR.",
+    prompt: "Press any key to continue.",
+  },
+  {
+    title: "Rules",
+    body:
+      "Attest blocks, propose blocks, and hard fork. Press the up arrow or any key to jump. Consistency is key!",
+    prompt: "Press any key to choose game mode.",
+  },
+];
+
 const PHASES = [
   {
     short: "Merge",
@@ -249,6 +270,7 @@ const leaderboardState = {
 const LEADERBOARD_SUBMIT_INDEX = leaderboardState.letters.length;
 
 const overlayState = {
+  introStage: 0,
   view: "title",
   selectedIndex: 0,
 };
@@ -256,7 +278,7 @@ let broadcastTimeoutId = 0;
 
 const pauseMenuActions = ["resume", "restart", "mode-select", "game-selector"];
 
-showTitle();
+showIntro();
 updateHud();
 requestAnimationFrame(frame);
 
@@ -332,6 +354,14 @@ window.addEventListener("keydown", (event) => {
     }
   }
 
+  if (overlayState.view === "intro") {
+    if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault();
+      advanceIntro();
+    }
+    return;
+  }
+
   if (overlayState.view === "title") {
     if (event.code === "ArrowLeft") {
       overlayState.selectedIndex = (overlayState.selectedIndex + 2) % 3;
@@ -383,6 +413,11 @@ overlay.addEventListener("pointerdown", (event) => {
 
   const actionName = action.getAttribute("data-overlay-action");
   const mode = action.getAttribute("data-mode");
+
+  if (actionName === "intro-continue") {
+    advanceIntro();
+    return;
+  }
 
   if (actionName === "mode-select") {
     game.screen = "title";
@@ -530,6 +565,21 @@ function pollGamepad() {
       hideOverlay();
       game.screen = "playing";
       overlayState.view = "playing";
+    }
+    return;
+  }
+
+  if (overlayState.view === "intro") {
+    if (
+      primaryPressed ||
+      startPressed ||
+      backPressed ||
+      leftPressed ||
+      rightPressed ||
+      horizontalEdge ||
+      verticalEdge
+    ) {
+      advanceIntro();
     }
     return;
   }
@@ -897,6 +947,30 @@ function primaryAction() {
     player.tilt = -0.18;
     audio.jump();
   }
+}
+
+function showIntro() {
+  audio.stopMusic();
+  overlayState.view = "intro";
+  armInputCooldown();
+  showOverlay();
+  const stage = INTRO_STAGES[Math.max(0, Math.min(overlayState.introStage, INTRO_STAGES.length - 1))];
+  overlayCard.innerHTML = `
+    <div class="overlay-kicker">Node Runners</div>
+    <h1 class="overlay-title">${stage.title}</h1>
+    <p class="overlay-copy">${stage.body}</p>
+    <p class="overlay-copy overlay-copy--prompt">${stage.prompt}</p>
+    <button class="overlay-button overlay-button--full" type="button" data-overlay-action="intro-continue">Continue</button>
+  `;
+}
+
+function advanceIntro() {
+  if (overlayState.introStage < INTRO_STAGES.length - 1) {
+    overlayState.introStage += 1;
+    showIntro();
+    return;
+  }
+  showTitle();
 }
 
 function showTitle() {

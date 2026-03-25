@@ -262,16 +262,24 @@ body,
 
 .overlay-title {
   margin: 0;
-  font-size: clamp(34px, 6vw, 54px);
+  font-size: clamp(30px, 4.8vw, 46px);
   line-height: 0.95;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .overlay-copy {
   margin: 16px 0 0;
   color: var(--text);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.overlay-copy--prompt {
+  color: #89ddff;
+  font-size: 16px;
 }
 
 .mode-grid {
@@ -305,6 +313,7 @@ body,
 .mode-card-title,
 .mode-card-metric {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .mode-card-title {
@@ -325,6 +334,7 @@ body,
   color: var(--text);
   font-size: 15px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .mode-card-subtitle {
@@ -482,6 +492,15 @@ body,
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.overlay-button--full {
+  width: 100%;
+  min-height: 72px;
+  justify-content: center;
+  border-radius: 26px;
+  font-size: 18px;
+  background: linear-gradient(180deg, rgba(39, 72, 110, 0.96), rgba(29, 55, 87, 0.96));
 }
 
 .overlay-actions-stack .overlay-button {

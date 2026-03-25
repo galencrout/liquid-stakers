@@ -140,6 +140,67 @@ body,
   opacity: 1;
 }
 
+.broadcast-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  z-index: 1;
+}
+
+.broadcast-flash.is-visible {
+  opacity: 1;
+}
+
+.broadcast-flash__text {
+  position: absolute;
+  left: 50%;
+  top: -14%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: none;
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: clamp(34px, 6.4vw, 74px);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.76);
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.42),
+    0 0 30px rgba(255, 255, 255, 0.24);
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+
+.broadcast-flash.is-proposal .broadcast-flash__text,
+.broadcast-flash.is-hardfork .broadcast-flash__text {
+  animation: broadcast-sweep 1s linear forwards;
+}
+
+@keyframes broadcast-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-18%) scale(0.97);
+  }
+
+  12% {
+    opacity: 0.92;
+    transform: translateX(-50%) translateY(0%) scale(1);
+  }
+
+  72% {
+    opacity: 0.82;
+    transform: translateX(-50%) translateY(305%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(380%) scale(1.01);
+  }
+}
+
 .phase-title {
   font-size: 18px;
   letter-spacing: 0.22em;

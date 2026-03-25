@@ -31,14 +31,8 @@ const PROPOSAL_ART = [
   "",
   "!!!!",
 ];
-const PROPOSAL_FLASH_DURATION = 1.0;
-const HARDFORK_FLASH_DURATION = 1.0;
+const BROADCAST_FLASH_DURATION_MS = 1000;
 const INPUT_COOLDOWN_MS = 350;
-const PROPOSAL_FLASH_ALPHA = 0.58;
-const PROPOSAL_FLASH_TRAVEL = 500;
-const HARDFORK_FLASH_ALPHA = 0.42;
-const HARDFORK_FLASH_TRAVEL = 260;
-
 const MODES = {
   vanilla: {
     key: "vanilla",
@@ -66,6 +60,22 @@ const PHASES = [
     floor: "#dfe8ef",
   },
   {
+    short: "Shapella",
+    sky: ["#1a2c43", "#091019"],
+    accent: "#a9c7f0",
+    line: "#506986",
+    panel: "rgba(169, 199, 240, 0.2)",
+    floor: "#e5ecf5",
+  },
+  {
+    short: "Dencun",
+    sky: ["#173137", "#081115"],
+    accent: "#9cd9d2",
+    line: "#4f7973",
+    panel: "rgba(156, 217, 210, 0.2)",
+    floor: "#e3efed",
+  },
+  {
     short: "Pectra",
     sky: ["#15342f", "#08110f"],
     accent: "#a9d7bf",
@@ -88,6 +98,14 @@ const PHASES = [
     line: "#896a4e",
     panel: "rgba(237, 201, 152, 0.2)",
     floor: "#f1e8da",
+  },
+  {
+    short: "Hegota",
+    sky: ["#2b1f25", "#0b0c11"],
+    accent: "#f0bdd6",
+    line: "#8a5f74",
+    panel: "rgba(240, 189, 214, 0.2)",
+    floor: "#f3e7ee",
   },
 ];
 
@@ -147,6 +165,9 @@ app.innerHTML = `
         <div class="phase-banner" data-phase-banner>
           <div class="phase-title" data-phase-title>Merge</div>
         </div>
+        <div class="broadcast-flash" data-broadcast-flash aria-hidden="true">
+          <div class="broadcast-flash__text" data-broadcast-text>BLOCK PROPOSED!!!!</div>
+        </div>
         <div class="overlay" data-overlay>
           <div class="overlay-card overlay-card--wide" data-overlay-card></div>
         </div>
@@ -173,6 +194,8 @@ const overlayCard = document.querySelector("[data-overlay-card]");
 const phaseBanner = document.querySelector("[data-phase-banner]");
 const phaseTitle = document.querySelector("[data-phase-title]");
 const hintEl = document.querySelector("[data-hint]");
+const broadcastFlash = document.querySelector("[data-broadcast-flash]");
+const broadcastText = document.querySelector("[data-broadcast-text]");
 
 const hud = {
   mode: document.querySelector('[data-hud="mode"]'),
@@ -197,10 +220,6 @@ const game = {
   nextProposalAt: 12,
   bestBeforeRun: 0,
   pendingLeaderboardEntry: false,
-  proposalFlash: 0,
-  hardforkFlash: 0,
-  hardforkText: "",
-  hardforkTextCanvas: null,
   flappy: {
     speed: FLAPPY.startSpeed,
     columns: [],
@@ -229,6 +248,7 @@ const overlayState = {
   view: "title",
   selectedIndex: 0,
 };
+let broadcastTimeoutId = 0;
 
 const pauseMenuActions = ["resume", "restart", "mode-select", "game-selector"];
 
@@ -687,16 +707,13 @@ function startSelectedMode(mode) {
   game.nextProposalAt = 10 + ((Math.random() * 6) | 0);
   game.bestBeforeRun = getHighScore();
   game.pendingLeaderboardEntry = false;
-  game.proposalFlash = 0;
-  game.hardforkFlash = 0;
-  game.hardforkText = "";
-  game.hardforkTextCanvas = null;
   leaderboardState.mode = null;
   leaderboardState.score = 0;
   leaderboardState.letters = ["A", "A", "A", "A", "A"];
   leaderboardState.index = 0;
   overlayState.view = "playing";
   game.particles = [];
+  clearBroadcastFlash();
 
   if (mode === "vanilla") {
     resetFlappy();
@@ -992,9 +1009,7 @@ function update(delta) {
       game.runner.speed = Math.min(RUNNER.maxSpeed, RUNNER.startSpeed + game.phaseIndex * RUNNER.speedStep);
     }
     showPhase(PHASES[game.phaseIndex]);
-    game.hardforkFlash = HARDFORK_FLASH_DURATION;
-    game.hardforkText = `${PHASES[game.phaseIndex].short.toUpperCase()} HARDFORK!`;
-    game.hardforkTextCanvas = getHardforkTextCanvas(game.hardforkText);
+    triggerBroadcast(`${PHASES[game.phaseIndex].short.toUpperCase()} HARDFORK!`, "hardfork");
     audio.phase();
     updateHud();
   }
@@ -1004,8 +1019,6 @@ function update(delta) {
   } else {
     updateRunner(delta);
   }
-  game.proposalFlash = Math.max(0, game.proposalFlash - delta);
-  game.hardforkFlash = Math.max(0, game.hardforkFlash - delta);
   updateParticles(delta);
 }
 
@@ -1102,7 +1115,7 @@ function onSlotCleared(proposal) {
   game.slotsCleared += 1;
   if (proposal) {
     audio.proposal();
-    game.proposalFlash = PROPOSAL_FLASH_DURATION;
+    triggerBroadcast("BLOCK PROPOSED!!!!", "proposal");
   }
   if (game.slotsCleared > getHighScore()) {
     setHighScore(game.slotsCleared);
@@ -1206,49 +1219,13 @@ function render() {
   if (game.activeMode === "vanilla") {
     drawFlappyLanes(phase);
     drawFlappyColumns(phase);
-    drawProposalArt();
-    drawHardforkArt();
     drawFlappyPlayer(phase);
   } else {
     drawRunnerLanes(phase);
     drawRunnerObstacles(phase);
-    drawProposalArt();
-    drawHardforkArt();
     drawRunnerPlayer(phase);
   }
   drawParticles();
-}
-
-function drawProposalArt() {
-  if (game.proposalFlash <= 0 || !EFFECTS_ENABLED) {
-    return;
-  }
-
-  const progress = 1 - game.proposalFlash / PROPOSAL_FLASH_DURATION;
-  const baseX = 110 + Math.sin(progress * Math.PI * 1.1) * 16;
-  const baseY = 42 + progress * PROPOSAL_FLASH_TRAVEL;
-  const alpha = PROPOSAL_FLASH_ALPHA * (1 - progress * 0.36);
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(renderCache.proposalArt, baseX, baseY);
-  ctx.restore();
-}
-
-function drawHardforkArt() {
-  if (game.hardforkFlash <= 0 || !game.hardforkTextCanvas || !EFFECTS_ENABLED) {
-    return;
-  }
-
-  const progress = 1 - game.hardforkFlash / HARDFORK_FLASH_DURATION;
-  const alpha = HARDFORK_FLASH_ALPHA * (1 - progress * 0.4);
-  const x = 126;
-  const y = 96 + progress * HARDFORK_FLASH_TRAVEL;
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.drawImage(game.hardforkTextCanvas, x, y);
-  ctx.restore();
 }
 
 function drawFlappyLanes(phase) {
@@ -1480,8 +1457,6 @@ function createRenderCache() {
   }
   return {
     backgrounds,
-    proposalArt: buildProposalArtCanvas(),
-    hardforkTexts: Object.create(null),
   };
 }
 
@@ -1532,45 +1507,24 @@ function buildBackgroundCanvas(phase, mode) {
   return background;
 }
 
-function buildProposalArtCanvas() {
-  const art = document.createElement("canvas");
-  art.width = 1120;
-  art.height = 420;
-  const artCtx = art.getContext("2d", { alpha: true }) || art.getContext("2d");
-
-  artCtx.font = "bold 28px IBM Plex Mono, monospace";
-  artCtx.textAlign = "left";
-  artCtx.textBaseline = "top";
-
-  PROPOSAL_ART.forEach((line, index) => {
-    if (!line) return;
-    const y = index * 32;
-    const x = index * 7;
-    const lineAlpha = Math.max(0.22, 0.52 - index * 0.016);
-    artCtx.fillStyle = `rgba(255, 255, 255, ${lineAlpha})`;
-    artCtx.fillText(line, x, y);
-    artCtx.fillStyle = `rgba(255, 255, 255, ${Math.max(0.06, lineAlpha * 0.34)})`;
-    artCtx.fillText(line, x + 6, y + 6);
-  });
-
-  return art;
+function clearBroadcastFlash() {
+  if (broadcastTimeoutId) {
+    window.clearTimeout(broadcastTimeoutId);
+    broadcastTimeoutId = 0;
+  }
+  broadcastFlash.classList.remove("is-visible", "is-proposal", "is-hardfork");
 }
 
-function getHardforkTextCanvas(text) {
-  if (!renderCache.hardforkTexts[text]) {
-    const hardforkCanvas = document.createElement("canvas");
-    hardforkCanvas.width = 1100;
-    hardforkCanvas.height = 140;
-    const hardforkCtx =
-      hardforkCanvas.getContext("2d", { alpha: true }) || hardforkCanvas.getContext("2d");
-    hardforkCtx.font = "bold 62px IBM Plex Mono, monospace";
-    hardforkCtx.textAlign = "left";
-    hardforkCtx.textBaseline = "top";
-    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.92)";
-    hardforkCtx.fillText(text, 0, 0);
-    hardforkCtx.fillStyle = "rgba(255, 255, 255, 0.2)";
-    hardforkCtx.fillText(text, 8, 8);
-    renderCache.hardforkTexts[text] = hardforkCanvas;
+function triggerBroadcast(text, type) {
+  broadcastText.textContent = text;
+  broadcastFlash.classList.remove("is-visible", "is-proposal", "is-hardfork");
+  void broadcastFlash.offsetWidth;
+  broadcastFlash.classList.add("is-visible", type === "hardfork" ? "is-hardfork" : "is-proposal");
+  if (broadcastTimeoutId) {
+    window.clearTimeout(broadcastTimeoutId);
   }
-  return renderCache.hardforkTexts[text];
+  broadcastTimeoutId = window.setTimeout(() => {
+    broadcastFlash.classList.remove("is-visible");
+    broadcastTimeoutId = 0;
+  }, BROADCAST_FLASH_DURATION_MS);
 }

@@ -584,15 +584,24 @@ function createAudio() {
   let musicStep = 0;
   let musicPlaying = false;
 
+  const STEP_TIME = 0.17;
   const MUSIC_PATTERN = [
-    { bass: 110, lead: 440, hold: 0.18 },
-    { bass: 110, lead: 554.37, hold: 0.18 },
-    { bass: 146.83, lead: 659.25, hold: 0.18 },
-    { bass: 146.83, lead: 554.37, hold: 0.18 },
-    { bass: 164.81, lead: 587.33, hold: 0.18 },
-    { bass: 164.81, lead: 698.46, hold: 0.18 },
-    { bass: 146.83, lead: 659.25, hold: 0.18 },
-    { bass: 123.47, lead: 493.88, hold: 0.18 },
+    { bass: 110.0, lead: 659.25, harmony: 880.0, accent: true },
+    { bass: 110.0, lead: 783.99, harmony: 987.77, accent: false },
+    { bass: 123.47, lead: 880.0, harmony: 1046.5, accent: true },
+    { bass: 123.47, lead: 783.99, harmony: 987.77, accent: false },
+    { bass: 146.83, lead: 987.77, harmony: 1174.66, accent: true },
+    { bass: 146.83, lead: 1046.5, harmony: 1318.51, accent: false },
+    { bass: 123.47, lead: 880.0, harmony: 1046.5, accent: true },
+    { bass: 98.0, lead: 739.99, harmony: 987.77, accent: false },
+    { bass: 110.0, lead: 659.25, harmony: 880.0, accent: true },
+    { bass: 110.0, lead: 783.99, harmony: 1046.5, accent: false },
+    { bass: 123.47, lead: 880.0, harmony: 1174.66, accent: true },
+    { bass: 123.47, lead: 987.77, harmony: 1318.51, accent: false },
+    { bass: 146.83, lead: 1046.5, harmony: 1396.91, accent: true },
+    { bass: 146.83, lead: 987.77, harmony: 1318.51, accent: false },
+    { bass: 123.47, lead: 880.0, harmony: 1046.5, accent: true },
+    { bass: 82.41, lead: 739.99, harmony: 987.77, accent: false },
   ];
 
   function ensure() {
@@ -601,10 +610,10 @@ function createAudio() {
       if (!Ctor) return null;
       context = new Ctor();
       master = context.createGain();
-      master.gain.value = 0.92;
+      master.gain.value = 1.0;
       master.connect(context.destination);
       musicGain = context.createGain();
-      musicGain.gain.value = 0.11;
+      musicGain.gain.value = 0.22;
       musicGain.connect(master);
     }
     if (context.state === "suspended") {
@@ -640,21 +649,49 @@ function createAudio() {
     osc.start(when);
     osc.stop(when + duration + 0.02);
   }
+  function noiseHit(when, duration, gainValue, highpassFreq = 900) {
+    if (!context || !musicGain) return;
+    const buffer = context.createBuffer(1, Math.max(1, Math.floor(context.sampleRate * duration)), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let index = 0; index < data.length; index += 1) {
+      data[index] = Math.random() * 2 - 1;
+    }
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    filter.type = "highpass";
+    filter.frequency.setValueAtTime(highpassFreq, when);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.linearRampToValueAtTime(gainValue, when + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    source.connect(filter).connect(gain).connect(musicGain);
+    source.start(when);
+    source.stop(when + duration);
+  }
   function scheduleMusicBar() {
     const ctxRef = ensure();
     if (!ctxRef || !musicPlaying) return;
     const startAt = ctxRef.currentTime + 0.03;
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 16; index += 1) {
       const step = MUSIC_PATTERN[(musicStep + index) % MUSIC_PATTERN.length];
-      const when = startAt + index * 0.24;
-      musicNote(step.bass, when, step.hold + 0.05, "square", 0.05);
-      musicNote(step.lead, when, step.hold, "triangle", 0.035);
-      if (index % 2 === 0) {
-        musicNote(step.lead * 2, when + 0.12, 0.08, "square", 0.018);
+      const when = startAt + index * STEP_TIME;
+      const bassDuration = step.accent ? 0.16 : 0.13;
+      const leadDuration = step.accent ? 0.14 : 0.11;
+      musicNote(step.bass, when, bassDuration, "square", 0.065);
+      musicNote(step.lead, when, leadDuration, "triangle", step.accent ? 0.055 : 0.045);
+      musicNote(step.harmony, when + 0.05, 0.08, "square", 0.018);
+      if (index % 4 === 0) {
+        noiseHit(when, 0.045, 0.02, 1200);
+      } else if (index % 2 === 0) {
+        noiseHit(when, 0.03, 0.012, 1800);
+      }
+      if (index % 2 === 1) {
+        musicNote(step.lead * 2, when + 0.085, 0.055, "square", 0.02);
       }
     }
-    musicStep = (musicStep + 8) % MUSIC_PATTERN.length;
-    musicTimer = window.setTimeout(scheduleMusicBar, 1600);
+    musicStep = (musicStep + 16) % MUSIC_PATTERN.length;
+    musicTimer = window.setTimeout(scheduleMusicBar, STEP_TIME * 16 * 1000);
   }
   function stopMusic() {
     musicPlaying = false;

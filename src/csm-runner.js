@@ -584,24 +584,24 @@ function createAudio() {
   let musicStep = 0;
   let musicPlaying = false;
 
-  const STEP_TIME = 0.17;
+  const STEP_TIME = 0.16;
   const MUSIC_PATTERN = [
-    { bass: 110.0, lead: 659.25, harmony: 880.0, accent: true },
-    { bass: 110.0, lead: 783.99, harmony: 987.77, accent: false },
-    { bass: 123.47, lead: 880.0, harmony: 1046.5, accent: true },
-    { bass: 123.47, lead: 783.99, harmony: 987.77, accent: false },
-    { bass: 146.83, lead: 987.77, harmony: 1174.66, accent: true },
-    { bass: 146.83, lead: 1046.5, harmony: 1318.51, accent: false },
-    { bass: 123.47, lead: 880.0, harmony: 1046.5, accent: true },
-    { bass: 98.0, lead: 739.99, harmony: 987.77, accent: false },
-    { bass: 110.0, lead: 659.25, harmony: 880.0, accent: true },
-    { bass: 110.0, lead: 783.99, harmony: 1046.5, accent: false },
-    { bass: 123.47, lead: 880.0, harmony: 1174.66, accent: true },
-    { bass: 123.47, lead: 987.77, harmony: 1318.51, accent: false },
-    { bass: 146.83, lead: 1046.5, harmony: 1396.91, accent: true },
-    { bass: 146.83, lead: 987.77, harmony: 1318.51, accent: false },
-    { bass: 123.47, lead: 880.0, harmony: 1046.5, accent: true },
-    { bass: 82.41, lead: 739.99, harmony: 987.77, accent: false },
+    { bass: 130.81, lead: 523.25, accent: true, kick: true },
+    { bass: 130.81, lead: null, accent: false, snare: true },
+    { bass: 130.81, lead: 659.25, accent: false, kick: true },
+    { bass: 130.81, lead: null, accent: false, snare: true },
+    { bass: 98.0, lead: 783.99, accent: true, kick: true },
+    { bass: 98.0, lead: null, accent: false, snare: true },
+    { bass: 110.0, lead: 659.25, accent: false, kick: true },
+    { bass: 110.0, lead: null, accent: false, snare: true },
+    { bass: 87.31, lead: 587.33, accent: true, kick: true },
+    { bass: 87.31, lead: null, accent: false, snare: true },
+    { bass: 87.31, lead: 698.46, accent: false, kick: true },
+    { bass: 87.31, lead: null, accent: false, snare: true },
+    { bass: 98.0, lead: 783.99, accent: true, kick: true },
+    { bass: 98.0, lead: 659.25, accent: false, snare: true },
+    { bass: 130.81, lead: 523.25, accent: false, kick: true },
+    { bass: 130.81, lead: 392.0, accent: false, snare: true },
   ];
 
   function ensure() {
@@ -613,7 +613,7 @@ function createAudio() {
       master.gain.value = 1.0;
       master.connect(context.destination);
       musicGain = context.createGain();
-      musicGain.gain.value = 0.22;
+      musicGain.gain.value = 0.24;
       musicGain.connect(master);
     }
     if (context.state === "suspended") {
@@ -649,6 +649,10 @@ function createAudio() {
     osc.start(when);
     osc.stop(when + duration + 0.02);
   }
+  function pulseChord(frequency, when, duration, gainValue) {
+    musicNote(frequency, when, duration, "square", gainValue);
+    musicNote(frequency * 1.5, when, duration * 0.92, "square", gainValue * 0.48);
+  }
   function noiseHit(when, duration, gainValue, highpassFreq = 900) {
     if (!context || !musicGain) return;
     const buffer = context.createBuffer(1, Math.max(1, Math.floor(context.sampleRate * duration)), context.sampleRate);
@@ -676,18 +680,20 @@ function createAudio() {
     for (let index = 0; index < 16; index += 1) {
       const step = MUSIC_PATTERN[(musicStep + index) % MUSIC_PATTERN.length];
       const when = startAt + index * STEP_TIME;
-      const bassDuration = step.accent ? 0.16 : 0.13;
-      const leadDuration = step.accent ? 0.14 : 0.11;
-      musicNote(step.bass, when, bassDuration, "square", 0.065);
-      musicNote(step.lead, when, leadDuration, "triangle", step.accent ? 0.055 : 0.045);
-      musicNote(step.harmony, when + 0.05, 0.08, "square", 0.018);
-      if (index % 4 === 0) {
-        noiseHit(when, 0.045, 0.02, 1200);
-      } else if (index % 2 === 0) {
-        noiseHit(when, 0.03, 0.012, 1800);
+      const bassDuration = step.accent ? 0.13 : 0.1;
+      musicNote(step.bass, when, bassDuration, "square", 0.058);
+      if (step.lead) {
+        const leadDuration = step.accent ? 0.125 : 0.1;
+        musicNote(step.lead, when, leadDuration, "triangle", step.accent ? 0.068 : 0.052);
+        if (step.accent) {
+          pulseChord(step.lead / 2, when + 0.03, 0.08, 0.022);
+        }
       }
-      if (index % 2 === 1) {
-        musicNote(step.lead * 2, when + 0.085, 0.055, "square", 0.02);
+      if (step.kick) {
+        noiseHit(when, 0.04, 0.018, 1050);
+      }
+      if (step.snare) {
+        noiseHit(when, 0.028, 0.012, 2400);
       }
     }
     musicStep = (musicStep + 16) % MUSIC_PATTERN.length;

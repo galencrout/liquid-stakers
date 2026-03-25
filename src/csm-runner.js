@@ -130,7 +130,7 @@ app.innerHTML = `
   <main class="runner-shell">
     <section class="runner-frame">
       <div class="runner-topbar">
-        <div class="runner-brand"><span class="runner-brand-mark"></span><span>Staking Modes</span></div>
+        <div class="runner-brand"><span class="runner-brand-mark"></span><span>Node Runners</span></div>
       </div>
       <section class="runner-stage">
         <canvas class="runner-canvas" width="${WIDTH}" height="${HEIGHT}" aria-label="Staking game"></canvas>

@@ -114,8 +114,8 @@
   <body>
     <main class="chooser">
       <h1 class="title">Choose Your Game</h1>
-      <p class="subtitle">Pick one mode to launch.</p>
-      <p class="instructions">Use the joystick to choose. Press white Start button to select.</p>
+      <p class="subtitle">Choose a game to launch.</p>
+      <p class="instructions">Use the joystick to choose. Press any button to select.</p>
 
       <section class="grid">
         <a class="card is-selected" href="./liquid-stakers.html" aria-label="Play Liquid Stakers" data-card="0">
@@ -127,7 +127,7 @@
         <a class="card" href="./eth-chomp.html" aria-label="Play Stake-Man" data-card="1">
           <img class="poster" src="./src/assets/optimized/stake-man-poster.jpg" alt="Stake-Man poster" />
           <div class="label">Stake-Man</div>
-          <p class="desc">Pac-Man style ETH chomp maze with queue-gated Regular mode.</p>
+          <p class="desc">Pac-Man-style ETH chomp maze with queue-gated Regular Staking.</p>
         </a>
 
         <a class="card" href="./csm-runner.html" aria-label="Play Node Runners" data-card="2">
@@ -180,10 +180,9 @@
 
         const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
         const rightPressed = consumeButtonEdge("right", pads.some((pad) => !!pad.buttons[15]?.pressed));
-        const confirmPressed =
-          consumeButtonEdge("a", pads.some((pad) => !!pad.buttons[0]?.pressed)) ||
-          consumeButtonEdge("start", pads.some((pad) => !!pad.buttons[9]?.pressed)) ||
-          consumeButtonEdge("menu", pads.some((pad) => !!pad.buttons[8]?.pressed));
+        const confirmPressed = pads.some((pad) =>
+          pad.buttons?.some((button, index) => consumeButtonEdge(`button-${index}`, !!button?.pressed)),
+        );
 
         if (leftPressed) selectCard(selectedIndex - 1);
         if (rightPressed) selectCard(selectedIndex + 1);

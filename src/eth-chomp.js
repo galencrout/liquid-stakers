@@ -140,19 +140,19 @@ const INTRO_STAGES = [
     title: "Stake-Man",
     body:
       "Welcome to Stake-Man, a maze game about navigating Ethereum staking. Choose Regular Staking or Liquid Staking with Lido.",
-    prompt: "Press A, Start, Space, Enter, or any arrow to continue.",
+    prompt: "Press any button to continue.",
   },
   {
     title: "Why It Matters",
     body:
       "Regular Staking can hold you in the entry queue before rewards start flowing. Liquid Staking changes the pace by letting you collect immediately.",
-    prompt: "Press A, Start, Space, Enter, or any arrow for rules.",
+    prompt: "Press any button to continue.",
   },
   {
     title: "Rules",
     body:
       "Chomp every ETH crystal, avoid the pursuers, and use power pellets to flip the chase. Route planning and consistency win the maze.",
-    prompt: "Press A, Start, Space, Enter, or any arrow to choose a game mode.",
+    prompt: "Press any button to continue.",
   },
 ];
 

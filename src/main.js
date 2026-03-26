@@ -44,14 +44,14 @@ const INTRO_STAGES = [
   {
     title: "Why It Matters",
     body:
-      "Traditional staking positions can take days or months to unwind. stVaults aim to restore reaction time when markets move.",
+      "Traditional staking positions can take days or months to unwind. stVaults aims to restore reaction time when markets move.",
     hint: "Press A, Start, Space, or Enter for rules.",
   },
   {
     title: "Rules",
     body:
       "Survive sixty seconds and clear the queue pressure. Blue enemies take one shot, red take two, green take three. If they reach your validator zone, the round ends.",
-    hint: "Press A, Start, Space, or Enter to choose game mode.",
+    hint: "Press A, Start, Space, or Enter to choose Game Mode.",
   },
 ];
 
@@ -335,7 +335,7 @@ function handleIntroKey(code) {
     showIntro();
     return;
   }
-  if (code === "Enter" || code === "Space") {
+  if (code !== "Escape") {
     startGame(MODES[ui.selectedMode]);
   }
 }
@@ -854,7 +854,7 @@ function showIntro() {
 
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">CHOOSE A GAME MODE</div>
-    <h1 class="stakers-overlay-title">Select Staking Mode</h1>
+    <h1 class="stakers-overlay-title">Select your game mode.</h1>
     <div class="stakers-mode-grid">
       ${MODES.map(
         (mode, index) => `
@@ -870,9 +870,9 @@ function showIntro() {
       <span class="stakers-mode-subtitle">All-Time Top Runs</span>
       ${renderLeaderboard()}
     </div>
-    <div class="stakers-overlay-hint">Press 1 for Delegated. Press 2 for stVaults. A or Start begins.</div>
+    <div class="stakers-overlay-hint">Press any button to start.</div>
   `;
-  footerHint.textContent = "Arcade: 1 picks Delegated. 2 picks stVaults. A fires in-round. Start opens menu.";
+  footerHint.textContent = "Arcade: stick chooses game mode. Press any button to start. A fires in-round. Start opens menu.";
 }
 
 function showPauseMenu() {
@@ -884,7 +884,7 @@ function showPauseMenu() {
     <div class="stakers-overlay-kicker">${state.activeMode.label}</div>
     <h2 class="stakers-overlay-title">Game Menu</h2>
     <div class="stakers-menu-list">
-      ${["Resume", "Restart Round", "Choose Game Mode", "Back To Game Select"]
+      ${["Resume", "Restart Round", "Choose Game Mode", "Back to Game Select"]
         .map(
           (label, index) => `
             <button class="stakers-menu-item ${ui.pauseIndex === index ? "is-selected" : ""}" type="button" data-action="${[
@@ -946,7 +946,7 @@ function showGameOver() {
     <p class="stakers-overlay-copy">${state.endReason}</p>
     <div class="stakers-overlay-actions">
       <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Game Mode</button>
-      <button class="stakers-button stakers-button--ghost ${ui.endIndex === 1 ? "is-selected" : ""}" type="button" data-action="home">Back To Game Select</button>
+      <button class="stakers-button stakers-button--ghost ${ui.endIndex === 1 ? "is-selected" : ""}" type="button" data-action="home">Back to Game Select</button>
     </div>
     <div class="stakers-overlay-hint">A or Start returns to game mode select. B also returns to game mode select.</div>
   `;
@@ -1257,7 +1257,7 @@ function pollGamepad() {
     showIntro();
   }
 
-  if (primaryPressed || startPressed) startGame(MODES[ui.selectedMode]);
+  if (primaryPressed || startPressed || backPressed) startGame(MODES[ui.selectedMode]);
 }
 
 function createStorage() {

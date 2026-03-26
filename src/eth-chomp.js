@@ -139,20 +139,20 @@ const INTRO_STAGES = [
   {
     title: "Stake-Man",
     body:
-      "Welcome to Stake-Man, a maze game about navigating Ethereum staking. Choose Regular staking or choose Liquid Staking with Lido.",
+      "Welcome to Stake-Man, a maze game about navigating Ethereum staking. Choose Regular Staking or Liquid Staking with Lido.",
     prompt: "Press A, Start, Space, Enter, or any arrow to continue.",
   },
   {
     title: "Why It Matters",
     body:
-      "Regular staking can hold you in the entry queue before rewards start flowing. Liquid staking changes the pace by letting you collect immediately.",
+      "Regular Staking can hold you in the entry queue before rewards start flowing. Liquid Staking changes the pace by letting you collect immediately.",
     prompt: "Press A, Start, Space, Enter, or any arrow for rules.",
   },
   {
     title: "Rules",
     body:
       "Chomp every ETH crystal, avoid the pursuers, and use power pellets to flip the chase. Route planning and consistency win the maze.",
-    prompt: "Press A, Start, Space, Enter, or any arrow to choose game mode.",
+    prompt: "Press A, Start, Space, Enter, or any arrow to choose a game mode.",
   },
 ];
 
@@ -261,23 +261,24 @@ function showDifficultyScreen() {
   state.phase = "select";
   state.running = false;
   overlay.innerHTML = `
-    <div class="overlay-card tone-choice overlay-card--wide">
-      <h2>Select Game Mode</h2>
+    <div class="overlay-card overlay-card--wide overlay-card--intro tone-choice">
+      <div class="overlay-kicker">STAKE-MAN</div>
+      <h2 class="overlay-title overlay-title--mode">Choose a Game Mode</h2>
       <div class="mode-select-grid">
         <div class="mode-select-card">
           <h3>Regular Staking</h3>
-          <p>L or move left: queue delay before chomping ETH.</p>
+          <p>Press L or move left to start with the entry queue active before you can chomp ETH.</p>
         </div>
         <div class="mode-select-card">
           <h3>Liquid Staking (Lido)</h3>
-          <p>R or move right: chomp from the outset.</p>
+          <p>Press R or move right to start chomping ETH from the outset.</p>
         </div>
       </div>
       <div class="mode-select-card mode-select-card--leaderboard">
         <div class="mode-select-subtitle">All-Time Top Runs</div>
         ${renderLeaderboard()}
       </div>
-      <div class="overlay-footer">Press L or R to start. Press B to go back.</div>
+      <div class="overlay-footer overlay-footer--intro">Press L or R to start. Press B to go back.</div>
     </div>
   `;
   overlay.classList.add("show");
@@ -310,7 +311,7 @@ function showEndScreen(kind) {
         </div>
         <div class="mode-select-subtitle">Leaderboard</div>
         ${renderLeaderboard()}
-        <div class="overlay-footer">Press A or B for game mode. Start or Select opens menu.</div>
+        <div class="overlay-footer">Press A or B to return to game mode select. Press Start or Select to open the menu.</div>
       </div>
     `;
   } else {
@@ -323,7 +324,7 @@ function showEndScreen(kind) {
         </div>
         <div class="mode-select-subtitle">Leaderboard</div>
         ${renderLeaderboard()}
-        <div class="overlay-footer">Press A or B for game mode. Start or Select opens menu.</div>
+        <div class="overlay-footer">Press A or B to return to game mode select. Press Start or Select to open the menu.</div>
       </div>
     `;
   }
@@ -340,11 +341,11 @@ function openGameMenu() {
         { label: "Resume", action: () => closeGameMenu() },
         { label: "Restart Round", action: () => startRound(state.mode ?? "regular") },
         { label: "Choose Game Mode", action: () => showDifficultyScreen() },
-        { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
+        { label: "Back to Game Select", action: () => { window.location.href = HOME_URL; } },
       ]
     : [
         { label: "Choose Game Mode", action: () => showDifficultyScreen() },
-        { label: "Back To Game Select", action: () => { window.location.href = HOME_URL; } },
+        { label: "Back to Game Select", action: () => { window.location.href = HOME_URL; } },
       ];
   state.menuIndex = 0;
   renderGameMenu();

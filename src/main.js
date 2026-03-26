@@ -39,19 +39,19 @@ const INTRO_STAGES = [
     title: "Liquid Stakers",
     body:
       "Welcome to Liquid Stakers, a game about the opportunity cost of waiting through the Ethereum exit queue.",
-    hint: "Press A, Start, Space, or Enter to continue.",
+    hint: "Press any button to continue.",
   },
   {
     title: "Why It Matters",
     body:
       "Traditional staking positions can take days or months to unwind. stVaults aims to restore reaction time when markets move.",
-    hint: "Press A, Start, Space, or Enter for rules.",
+    hint: "Press any button to continue.",
   },
   {
     title: "Rules",
     body:
       "Survive sixty seconds and clear the queue pressure. Blue enemies take one shot, red take two, green take three. If they reach your validator zone, the round ends.",
-    hint: "Press A, Start, Space, or Enter to choose Game Mode.",
+    hint: "Press any button to continue.",
   },
 ];
 
@@ -314,12 +314,8 @@ overlay.addEventListener("pointerdown", (event) => {
 
 function handleIntroKey(code) {
   if (ui.introStage < INTRO_STAGES.length) {
-    if (code === "Enter" || code === "Space") {
+    if (code !== "Escape") {
       ui.introStage += 1;
-      showIntro();
-    }
-    if (code === "Escape" && ui.introStage > 0) {
-      ui.introStage -= 1;
       showIntro();
     }
     return;
@@ -848,7 +844,7 @@ function showIntro() {
       <div class="stakers-overlay-hint">${stage.hint}</div>
       <button class="stakers-button stakers-button--primary" type="button" data-action="next-intro">Continue</button>
     `;
-    footerHint.textContent = "Arcade: A or Start continues. B goes back.";
+    footerHint.textContent = "Arcade: press any button to continue.";
     return;
   }
 
@@ -948,7 +944,6 @@ function showGameOver() {
       <button class="stakers-button ${ui.endIndex === 0 ? "is-selected" : ""}" type="button" data-action="mode-select">Choose Game Mode</button>
       <button class="stakers-button stakers-button--ghost ${ui.endIndex === 1 ? "is-selected" : ""}" type="button" data-action="home">Back to Game Select</button>
     </div>
-    <div class="stakers-overlay-hint">A or Start returns to game mode select. B also returns to game mode select.</div>
   `;
 }
 
@@ -1235,12 +1230,8 @@ function pollGamepad() {
   }
 
   if (ui.introStage < INTRO_STAGES.length) {
-    if (primaryPressed || startPressed) {
+    if (primaryPressed || startPressed || backPressed || leftPressed || rightPressed) {
       ui.introStage += 1;
-      showIntro();
-    }
-    if (backPressed && ui.introStage > 0) {
-      ui.introStage -= 1;
       showIntro();
     }
     return;

@@ -247,6 +247,16 @@ canvas {
   background: linear-gradient(180deg, rgba(10, 22, 40, 0.88), rgba(6, 14, 26, 0.86));
   padding: 18px 18px 16px;
   box-shadow: inset 0 1px 0 rgba(195, 226, 255, 0.04);
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.mode-select-card.is-selected {
+  border-color: rgba(146, 217, 255, 0.95);
+  box-shadow:
+    0 0 0 2px rgba(146, 217, 255, 0.24),
+    0 16px 34px rgba(12, 31, 56, 0.28),
+    inset 0 1px 0 rgba(218, 238, 255, 0.08);
+  transform: translateY(-1px);
 }
 
 .mode-select-card--leaderboard {
@@ -265,6 +275,15 @@ canvas {
   font-size: 17px;
   line-height: 1.5;
   color: #cfe3fc;
+}
+
+.mode-select-cta {
+  margin-top: 24px;
+  color: #9ad9ff;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .mode-select-subtitle {

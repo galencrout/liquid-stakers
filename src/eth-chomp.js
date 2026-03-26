@@ -159,6 +159,7 @@ const INTRO_STAGES = [
 const state = {
   phase: "intro",
   introStage: 0,
+  selectedMode: "regular",
   running: false,
   map: [],
   pellets: 0,
@@ -257,6 +258,11 @@ function advanceIntroScreen() {
   showDifficultyScreen();
 }
 
+function setSelectedMode(mode) {
+  state.selectedMode = mode;
+  if (state.phase === "select") showDifficultyScreen();
+}
+
 function showDifficultyScreen() {
   state.phase = "select";
   state.running = false;
@@ -265,20 +271,22 @@ function showDifficultyScreen() {
       <div class="overlay-kicker">STAKE-MAN</div>
       <h2 class="overlay-title overlay-title--mode">Choose a Game Mode</h2>
       <div class="mode-select-grid">
-        <div class="mode-select-card">
+        <div class="mode-select-card ${state.selectedMode === "regular" ? "is-selected" : ""}" data-action="select-mode" data-mode="regular">
           <h3>Regular Staking</h3>
           <p>Press L or move left to start with the entry queue active before you can chomp ETH.</p>
+          <div class="mode-select-cta">Entry Queue in Effect</div>
         </div>
-        <div class="mode-select-card">
+        <div class="mode-select-card ${state.selectedMode === "liquid" ? "is-selected" : ""}" data-action="select-mode" data-mode="liquid">
           <h3>Liquid Staking (Lido)</h3>
           <p>Press R or move right to start chomping ETH from the outset.</p>
+          <div class="mode-select-cta">Rewards Flow Immediately</div>
         </div>
       </div>
       <div class="mode-select-card mode-select-card--leaderboard">
         <div class="mode-select-subtitle">All-Time Top Runs</div>
         ${renderLeaderboard()}
       </div>
-      <div class="overlay-footer overlay-footer--intro">Press L or R to start. Press B to go back.</div>
+      <div class="overlay-footer overlay-footer--intro">Press left or right to choose. Press A or Start to begin. Press B to go back.</div>
     </div>
   `;
   overlay.classList.add("show");
@@ -981,9 +989,9 @@ function pollGamepad() {
   }
 
   if (state.phase === "select") {
-    if (regularPressed || (horizontalEdge && horizontalState < 0)) handleDifficultyChoice("regular");
-    if (liquidPressed || (horizontalEdge && horizontalState > 0)) handleDifficultyChoice("liquid");
-    if (primaryPressed) handleDifficultyChoice(horizontalState < 0 ? "regular" : "liquid");
+    if (regularPressed || (horizontalEdge && horizontalState < 0)) setSelectedMode("regular");
+    if (liquidPressed || (horizontalEdge && horizontalState > 0)) setSelectedMode("liquid");
+    if (primaryPressed) handleDifficultyChoice(state.selectedMode);
     if (backPressed) {
       state.introStage = INTRO_STAGES.length - 1;
       showIntroScreen();
@@ -1282,8 +1290,9 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (state.phase === "select") {
-    if (key === "1") handleDifficultyChoice("regular");
-    if (key === "2") handleDifficultyChoice("liquid");
+    if (key === "1" || key === "arrowleft" || key === "a") setSelectedMode("regular");
+    if (key === "2" || key === "arrowright" || key === "d") setSelectedMode("liquid");
+    if (key === " " || key === "enter") handleDifficultyChoice(state.selectedMode);
     if (key === "escape" || key === "b") {
       state.introStage = INTRO_STAGES.length - 1;
       showIntroScreen();
@@ -1324,6 +1333,9 @@ overlay.addEventListener("pointerdown", (event) => {
     saveLeaderboardInitials();
   } else if (type === "intro-continue") {
     advanceIntroScreen();
+  } else if (type === "select-mode") {
+    const mode = action.getAttribute("data-mode");
+    if (mode === "regular" || mode === "liquid") setSelectedMode(mode);
   } else if (type === "entry-slot") {
     leaderboardState.index = Number.parseInt(action.getAttribute("data-index") || "0", 10) || 0;
     refreshLeaderboardPicker();

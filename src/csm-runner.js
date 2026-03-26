@@ -36,7 +36,7 @@ const INPUT_COOLDOWN_MS = 350;
 const MODES = {
   vanilla: {
     key: "vanilla",
-    label: "Vanilla Staking",
+    label: "vanilla staking",
     stakeLabel: "Stake",
     bond: "32 ETH",
     apr: "2.75%",
@@ -44,7 +44,7 @@ const MODES = {
   },
   csm: {
     key: "csm",
-    label: "CSM ICS Mode",
+    label: "Lido ICS / CSM staking",
     stakeLabel: "Bond",
     bond: "1.5 ETH",
     apr: "5.87%",
@@ -56,20 +56,20 @@ const INTRO_STAGES = [
   {
     title: "Node Runners",
     body:
-      "Welcome to Node Runners, a game about running an Ethereum Validator from home. Choose Vanilla staking or choose Lido ICS / CSM staking.",
+      "Welcome to Node Runners, a game about running an Ethereum validator from home. Choose vanilla staking or Lido ICS / CSM staking.",
     prompt: "Press any key to continue.",
   },
   {
     title: "Why It Matters",
     body:
-      "With the Lido Community Staking Module it's easy and lucrative to validate Ethereum from home. Start with only 1.5 ETH and get annual rewards of ~5.87%. Compare this with vanilla staking with a minimum entry of 32 ETH and only ~2.75% APR.",
+      "With the Lido Community Staking Module, it is easy and lucrative to validate Ethereum from home. Start with only 1.5 ETH and get annual rewards of ~5.87%. Compare this with vanilla staking, which has a minimum entry of 32 ETH and only ~2.75% APR.",
     prompt: "Press any key to continue.",
   },
   {
     title: "Rules",
     body:
-      "Attest blocks, propose blocks, and hard fork. Press the up arrow or any key to jump. Consistency is key!",
-    prompt: "Press any key to choose game mode.",
+      "Attest blocks, propose blocks, and hard fork. Press joystick up or any key to jump. Consistency is key.",
+    prompt: "Choose your game mode. Joystick Up or any key to jump.",
   },
 ];
 
@@ -979,19 +979,19 @@ function showTitle() {
   armInputCooldown();
   showOverlay();
   overlayCard.innerHTML = `
-    <h1 class="overlay-title">Choose Game Mode</h1>
+    <h1 class="overlay-title">Choose game mode</h1>
     <div class="mode-grid">
       <button class="mode-card ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="vanilla">
-        <span class="mode-card-title">Vanilla Staking</span>
+        <span class="mode-card-title">vanilla staking</span>
         <span class="mode-card-metric">Stake: 32 ETH</span>
         <span class="mode-card-metric">APR: 2.75%</span>
-        <span class="mode-card-copy">Stake 32 ETH to become a vanilla ETH staker. Earn an estimated 2.75% APR.</span>
+        <span class="mode-card-copy">Stake 32 ETH to run a validator with vanilla staking. Earn an estimated 2.75% APR.</span>
       </button>
       <button class="mode-card ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="csm">
-        <span class="mode-card-title">CSM ICS Mode</span>
+        <span class="mode-card-title">Lido ICS / CSM staking</span>
         <span class="mode-card-metric">Bond: 1.5 ETH</span>
         <span class="mode-card-metric">APR: 5.87%</span>
-        <span class="mode-card-copy">Bond 1.5 ETH to become a CSM Identified Community Staker and earn an estimated ~5.87% APR.</span>
+        <span class="mode-card-copy">Bond 1.5 ETH to become a Lido Community Staking Module validator and earn an estimated 5.87% APR.</span>
       </button>
     </div>
     <div class="mode-card mode-card--leaderboard">
@@ -999,9 +999,9 @@ function showTitle() {
       ${renderLeaderboard()}
     </div>
     <div class="overlay-actions-row">
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to game select</button>
     </div>
-    <div class="overlay-menu-hint">Stick or D-pad chooses. L selects Vanilla. R selects CSM. A or Start confirms.</div>
+    <div class="overlay-menu-hint">Choose your game mode. Joystick Up or any key to jump.</div>
   `;
 }
 
@@ -1030,10 +1030,10 @@ function showGameOver() {
     ${renderLeaderboard()}
     <div class="overlay-actions-row">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose game mode</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to game select</button>
     </div>
-    <div class="overlay-menu-hint">Stick or D-pad chooses. A or Start confirms. B returns to mode select.</div>
+    <div class="overlay-menu-hint">Joystick or D-pad chooses. A or Start confirms. B returns to mode select.</div>
   `;
 }
 
@@ -1073,12 +1073,12 @@ function showPauseMenu() {
   showOverlay();
   overlayCard.innerHTML = `
     <div class="overlay-kicker">${getModeConfig().label}</div>
-    <h2 class="overlay-title">Game Menu</h2>
+    <h2 class="overlay-title">Game menu</h2>
     <div class="overlay-actions-stack">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="resume">Resume</button>
       <button class="overlay-button ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Restart</button>
-      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>
-      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back To Game Select</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose game mode</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to game select</button>
     </div>
     <div class="overlay-menu-hint">Joystick or D-pad navigates. A or Start confirms. B or Select resumes.</div>
   `;

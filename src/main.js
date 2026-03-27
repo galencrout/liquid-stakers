@@ -44,7 +44,7 @@ const INTRO_STAGES = [
   {
     title: "Why It Matters",
     body:
-      "Traditional staking positions can take days or months to unwind. stVaults aims to restore reaction time when markets move.",
+      "Traditional staking positions can take days or months to unwind. Lido stVaults let you unwind instantly with stETH, and skip the Ethereum Withdrawal Queue",
     hint: "Press any button to continue.",
   },
   {

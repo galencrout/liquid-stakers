@@ -62,7 +62,7 @@ const INTRO_STAGES = [
   {
     title: "Why It Matters",
     body:
-      "With the Lido Community Staking Module, it is easy and lucrative to validate Ethereum from home. Start with only 1.5 ETH and get annual rewards of ~5.87%. Compare this with vanilla staking, which has a minimum entry of 32 ETH and only ~2.75% APR.",
+      "With the Lido Community Staking Module, it's easy and lucrative to validate Ethereum from home. Start with only 1.5 ETH and get annual rewards of ~5.87%. Compare this with Vanilla Staking, which requires at least 32 ETH to get started, and only ~2.75% APR.",
     prompt: "Press any key to continue.",
   },
   {

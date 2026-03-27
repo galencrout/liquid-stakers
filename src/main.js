@@ -278,7 +278,7 @@ window.addEventListener("keyup", (event) => {
 
 canvas.addEventListener("pointerdown", () => {
   if (state.screen === "playing") {
-    attemptFire(performance.now());
+    handleFireInput(performance.now());
   } else if (state.screen === "intro" && ui.introStage >= INTRO_STAGES.length) {
     startGame(MODES[ui.selectedMode]);
   }
@@ -419,11 +419,7 @@ function sampleLag(now) {
     return;
   }
 
-  if (!state.baseLagMs) {
-    state.baseLagMs = randomBetween(state.activeMode.lagMin, state.activeMode.lagMax);
-    state.currentLagMs = state.baseLagMs;
-    state.nextLagSpikeAt = now + randomBetween(2600, 5200);
-  }
+  ensureDelegatedLag(now);
 
   if (!state.inLagSpike && now >= state.nextLagSpikeAt) {
     state.inLagSpike = true;
@@ -442,6 +438,13 @@ function sampleLag(now) {
   if (!state.inLagSpike) {
     state.currentLagMs = state.baseLagMs;
   }
+}
+
+function ensureDelegatedLag(now) {
+  if (state.activeMode.key === "stvaults" || state.baseLagMs) return;
+  state.baseLagMs = randomBetween(state.activeMode.lagMin, state.activeMode.lagMax);
+  state.currentLagMs = state.baseLagMs;
+  state.nextLagSpikeAt = now + randomBetween(2600, 5200);
 }
 
 function captureQueuedInput(now) {
@@ -465,6 +468,16 @@ function captureQueuedInput(now) {
   }
 
   input.fireHeld = fire;
+}
+
+function handleFireInput(now) {
+  if (state.activeMode.key === "stvaults") {
+    attemptFire(now);
+    return;
+  }
+
+  ensureDelegatedLag(now);
+  state.inputQueue.push({ applyAt: now + state.currentLagMs, fire: true });
 }
 
 function applyQueuedInput(now) {
@@ -1188,7 +1201,7 @@ function pollGamepad() {
   input.vertical = verticalState;
 
   if (state.screen === "playing") {
-    if (primaryPressed) attemptFire(performance.now());
+    if (primaryPressed) handleFireInput(performance.now());
     if (startPressed || backPressed) showPauseMenu();
     return;
   }

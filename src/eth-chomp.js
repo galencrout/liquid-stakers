@@ -273,12 +273,10 @@ function showDifficultyScreen() {
       <div class="mode-select-grid">
         <div class="mode-select-card ${state.selectedMode === "regular" ? "is-selected" : ""}" data-action="select-mode" data-mode="regular">
           <h3>Regular Staking</h3>
-          <p>Press L or move left to start with the entry queue active before you can chomp ETH.</p>
           <div class="mode-select-cta">Entry Queue in Effect</div>
         </div>
         <div class="mode-select-card ${state.selectedMode === "liquid" ? "is-selected" : ""}" data-action="select-mode" data-mode="liquid">
           <h3>Liquid Staking (Lido)</h3>
-          <p>Press R or move right to start chomping ETH from the outset.</p>
           <div class="mode-select-cta">Rewards Flow Immediately</div>
         </div>
       </div>
@@ -286,7 +284,7 @@ function showDifficultyScreen() {
         <div class="mode-select-subtitle">All-Time Top Runs</div>
         ${renderLeaderboard()}
       </div>
-      <div class="overlay-footer overlay-footer--intro">Press left or right to choose. Press A or Start to begin. Press B to go back.</div>
+      <div class="overlay-footer overlay-footer--intro">Press left or right to choose. Press A or Start to begin.</div>
     </div>
   `;
   overlay.classList.add("show");

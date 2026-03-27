@@ -145,7 +145,7 @@ const INTRO_STAGES = [
   {
     title: "Why It Matters",
     body:
-      "When you start Vanilla Staking, you need to pass through the Ethereum Entry Queue before you can start earning rewards. This can take days, or even months. Staking with Lido Core lets you bypass the Entry Queue and collect rewards immediately.",
+      "Lido core lets you skip the Ethereum Entry Queue and start earning rewards immediately. Compare this with Vanilla Staking and Delegated Staking setups, where it can take days or even months to start earning.",
     prompt: "Press any button to continue.",
   },
   {

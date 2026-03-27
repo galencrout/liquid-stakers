@@ -145,7 +145,7 @@ const INTRO_STAGES = [
   {
     title: "Why It Matters",
     body:
-      "Regular Staking can hold you in the entry queue before rewards start flowing. Liquid Staking changes the pace by letting you collect immediately.",
+      "When you start Vanilla Staking, you need to pass through the Ethereum Entry Queue before you can start earning rewards. This can take days, or even months. Staking with Lido Core lets you bypass the Entry Queue and collect rewards immediately.",
     prompt: "Press any button to continue.",
   },
   {

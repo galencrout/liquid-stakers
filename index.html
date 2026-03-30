@@ -207,7 +207,7 @@
 
         const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
         const rightPressed = consumeButtonEdge("right", pads.some((pad) => !!pad.buttons[15]?.pressed));
-        const LAUNCH_BUTTONS = [8, 9];
+        const LAUNCH_BUTTONS = [0];
         const navHeld =
           nextAxis !== 0 ||
           pads.some((pad) => !!pad.buttons[14]?.pressed || !!pad.buttons[15]?.pressed);

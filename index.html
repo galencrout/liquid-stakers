@@ -37,13 +37,6 @@
         overflow-wrap: anywhere;
       }
 
-      .subtitle {
-        margin: 0;
-        text-align: center;
-        color: #aecaec;
-        overflow-wrap: anywhere;
-      }
-
       .instructions {
         margin: 0;
         text-align: center;
@@ -133,6 +126,7 @@
   <body>
     <main class="chooser">
       <h1 class="title">Choose your game</h1>
+      <p class="instructions">Press white button to select.</p>
       <section class="grid">
         <a class="card is-selected" href="./liquid-stakers.html" aria-label="Play Liquid Stakers" data-card="0">
           <img class="poster" src="./src/assets/optimized/liquid-stakers-poster.jpg" alt="Liquid Stakers poster" />
@@ -213,7 +207,7 @@
 
         const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
         const rightPressed = consumeButtonEdge("right", pads.some((pad) => !!pad.buttons[15]?.pressed));
-        const LAUNCH_BUTTONS = [0, 1, 2, 3, 8, 9, 10, 11];
+        const LAUNCH_BUTTONS = [8, 9];
         const navHeld =
           nextAxis !== 0 ||
           pads.some((pad) => !!pad.buttons[14]?.pressed || !!pad.buttons[15]?.pressed);
@@ -260,7 +254,7 @@
           selectCard(selectedIndex + 1);
           lastNavAt = now;
         }
-        if ((e.key === "Enter" || e.key === " ") && canUse(lastLaunchAt, now)) {
+        if (e.key === "Enter" && canUse(lastLaunchAt, now)) {
           launchSelected();
           lastLaunchAt = now;
         }

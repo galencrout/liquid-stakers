@@ -212,8 +212,9 @@
 
         const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
         const rightPressed = consumeButtonEdge("right", pads.some((pad) => !!pad.buttons[15]?.pressed));
+        const LAUNCH_BUTTONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
         const confirmPressed = pads.some((pad) =>
-          pad.buttons?.some((button, index) => consumeButtonEdge(`button-${index}`, !!button?.pressed)),
+          LAUNCH_BUTTONS.some((index) => consumeButtonEdge(`button-${index}`, !!pad.buttons?.[index]?.pressed)),
         );
 
         if (leftPressed && canUse(lastNavAt, now)) {

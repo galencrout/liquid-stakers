@@ -164,6 +164,7 @@
       let padButtons = {};
       let lastNavAt = 0;
       let lastLaunchAt = 0;
+      let launchArmed = false;
 
       function selectCard(index) {
         selectedIndex = (index + OPTION_COUNT) % OPTION_COUNT;
@@ -212,7 +213,13 @@
 
         const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
         const rightPressed = consumeButtonEdge("right", pads.some((pad) => !!pad.buttons[15]?.pressed));
-        const LAUNCH_BUTTONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        const LAUNCH_BUTTONS = [0, 1, 2, 3, 8, 9, 10, 11];
+        const navHeld =
+          nextAxis !== 0 ||
+          pads.some((pad) => !!pad.buttons[14]?.pressed || !!pad.buttons[15]?.pressed);
+        const launchButtonsHeld = pads.some((pad) =>
+          LAUNCH_BUTTONS.some((index) => !!pad.buttons?.[index]?.pressed),
+        );
         const confirmPressed = pads.some((pad) =>
           LAUNCH_BUTTONS.some((index) => consumeButtonEdge(`button-${index}`, !!pad.buttons?.[index]?.pressed)),
         );
@@ -220,14 +227,23 @@
         if (leftPressed && canUse(lastNavAt, now)) {
           selectCard(selectedIndex - 1);
           lastNavAt = now;
+          launchArmed = false;
         }
         if (rightPressed && canUse(lastNavAt, now)) {
           selectCard(selectedIndex + 1);
           lastNavAt = now;
+          launchArmed = false;
         }
-        if (confirmPressed && canUse(lastLaunchAt, now)) {
+        if (nextAxis !== 0 && nextAxis !== padAxis && canUse(lastNavAt, now)) {
+          launchArmed = false;
+        }
+        if (!navHeld && !launchButtonsHeld) {
+          launchArmed = true;
+        }
+        if (confirmPressed && launchArmed && canUse(lastLaunchAt, now)) {
           launchSelected();
           lastLaunchAt = now;
+          launchArmed = false;
         }
 
         requestAnimationFrame(pollPad);

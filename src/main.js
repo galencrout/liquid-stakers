@@ -10,6 +10,7 @@ const ENEMY_BULLET_SPEED = 260;
 const ENEMY_DROP = 18;
 const ENEMY_ZONE_Y = 500;
 const GAMEPAD_DEADZONE = 0.45;
+const UI_DEBOUNCE_MS = 260;
 const MAX_LEVEL = 20;
 const HOME_URL = "./index.html";
 const HIGH_SCORE_KEY = "liquid-stakers-high-score";
@@ -134,6 +135,7 @@ const input = {
   horizontal: 0,
   vertical: 0,
   fireHeld: false,
+  lastUiActionAt: 0,
 };
 
 const ui = {
@@ -206,6 +208,7 @@ requestAnimationFrame(frame);
 
 window.addEventListener("keydown", (event) => {
   input.keys[event.code] = true;
+  if (event.repeat) return;
   if (["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD"].includes(event.code)) {
     event.preventDefault();
   }
@@ -313,6 +316,7 @@ overlay.addEventListener("pointerdown", (event) => {
 });
 
 function handleIntroKey(code) {
+  if (!consumeUiAction()) return;
   if (ui.introStage < INTRO_STAGES.length) {
     if (code !== "Escape") {
       ui.introStage += 1;
@@ -337,6 +341,7 @@ function handleIntroKey(code) {
 }
 
 function handlePauseKey(code) {
+  if (!consumeUiAction()) return;
   if (code === "ArrowUp") {
     ui.pauseIndex = (ui.pauseIndex + 3) % 4;
     showPauseMenu();
@@ -351,6 +356,7 @@ function handlePauseKey(code) {
 }
 
 function handleGameOverKey(code) {
+  if (!consumeUiAction()) return;
   if (code === "ArrowLeft" || code === "KeyA") {
     ui.endIndex = 0;
     showGameOver();
@@ -1156,6 +1162,7 @@ function updateHud(force = false) {
 }
 
 function pollGamepad() {
+  const now = performance.now();
   const pads = [...(navigator.getGamepads?.() ?? [])].filter((item) => item?.connected);
   if (!pads.length) {
     input.horizontal = 0;
@@ -1202,66 +1209,66 @@ function pollGamepad() {
 
   if (state.screen === "playing") {
     if (primaryPressed) handleFireInput(performance.now());
-    if (startPressed || backPressed) showPauseMenu();
+    if ((startPressed || backPressed) && consumeUiAction(now)) showPauseMenu();
     return;
   }
 
   if (state.screen === "help") {
-    if (primaryPressed || startPressed || backPressed) closeHelp();
+    if ((primaryPressed || startPressed || backPressed) && consumeUiAction(now)) closeHelp();
     return;
   }
 
   if (state.screen === "pause") {
-    if (verticalEdge) {
+    if (verticalEdge && consumeUiAction(now)) {
       ui.pauseIndex = (ui.pauseIndex + (verticalState > 0 ? 1 : 3)) % 4;
       showPauseMenu();
     }
-    if (primaryPressed || startPressed) activatePauseItem();
-    if (backPressed) resumeGame();
+    if ((primaryPressed || startPressed) && consumeUiAction(now)) activatePauseItem();
+    if (backPressed && consumeUiAction(now)) resumeGame();
     return;
   }
 
   if (state.screen === "gameover") {
     if (state.pendingLeaderboardEntry) {
-      if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
-      if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
-      if (primaryPressed || startPressed || backPressed) trySubmitLeaderboardEntry();
+      if (horizontalEdge && consumeUiAction(now)) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
+      if (verticalEdge && consumeUiAction(now)) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
+      if ((primaryPressed || startPressed || backPressed) && consumeUiAction(now)) trySubmitLeaderboardEntry();
       return;
     }
-    if (leftPressed) {
+    if (leftPressed && consumeUiAction(now)) {
       ui.endIndex = 0;
       showGameOver();
-    } else if (rightPressed) {
+    } else if (rightPressed && consumeUiAction(now)) {
       ui.endIndex = 1;
       showGameOver();
-    } else if (horizontalEdge) {
+    } else if (horizontalEdge && consumeUiAction(now)) {
       ui.endIndex = horizontalState > 0 ? 1 : 0;
       showGameOver();
     }
-    if (primaryPressed || startPressed || backPressed) resetToIntro(true);
+    if ((primaryPressed || startPressed || backPressed) && consumeUiAction(now)) resetToIntro(true);
     return;
   }
 
   if (ui.introStage < INTRO_STAGES.length) {
-    if (primaryPressed || startPressed || backPressed || leftPressed || rightPressed) {
+    if ((primaryPressed || startPressed || backPressed || leftPressed || rightPressed) && consumeUiAction(now)) {
       ui.introStage += 1;
       showIntro();
     }
     return;
   }
 
-  if (leftPressed) {
+  if (leftPressed && consumeUiAction(now)) {
     ui.selectedMode = 0;
     showIntro();
-  } else if (rightPressed) {
+  } else if (rightPressed && consumeUiAction(now)) {
     ui.selectedMode = 1;
     showIntro();
-  } else if (horizontalEdge) {
+  } else if (horizontalEdge && consumeUiAction(now)) {
     ui.selectedMode = horizontalState > 0 ? 1 : 0;
     showIntro();
   }
 
-  if (primaryPressed || startPressed || backPressed) startGame(MODES[ui.selectedMode]);
+  if ((primaryPressed || startPressed || backPressed) && consumeUiAction(now)) startGame(MODES[ui.selectedMode]);
 }
 
 function createStorage() {
@@ -1397,6 +1404,12 @@ function consumePadEdge(name, pressed) {
   const previous = !!input.gamepadButtons[name];
   input.gamepadButtons[name] = pressed;
   return pressed && !previous;
+}
+
+function consumeUiAction(now = performance.now()) {
+  if (now - input.lastUiActionAt < UI_DEBOUNCE_MS) return false;
+  input.lastUiActionAt = now;
+  return true;
 }
 
 function axisDirection(value, negative, positive) {

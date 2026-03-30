@@ -56,6 +56,7 @@ const QUEUE_MAX_MS = 25000;
 const QUEUE_MEAN_MS = 16500;
 const QUEUE_STD_MS = 3200;
 const GAMEPAD_DEADZONE = 0.45;
+const UI_DEBOUNCE_MS = 260;
 const HOME_URL = "./index.html";
 const CHOMP_SCORE = 0.3;
 const GHOST_SCORE = 2;
@@ -187,6 +188,7 @@ const state = {
   previousPhase: null,
   bestBeforeRun: 0,
   pendingLeaderboardEntry: false,
+  lastUiActionAt: 0,
 };
 
 const audio = { ctx: null, master: null, timer: null, step: 0 };
@@ -912,7 +914,14 @@ function axisDirection(value, negative, positive) {
   return null;
 }
 
+function consumeUiAction(now = performance.now()) {
+  if (now - state.lastUiActionAt < UI_DEBOUNCE_MS) return false;
+  state.lastUiActionAt = now;
+  return true;
+}
+
 function pollGamepad() {
+  const now = performance.now();
   const pads = getConnectedGamepads();
   if (!pads.length) {
     state.gamepadAxis.horizontal = 0;
@@ -981,30 +990,36 @@ function pollGamepad() {
       horizontalEdge ||
       verticalEdge
     ) {
+      if (consumeUiAction(now)) {
       advanceIntroScreen();
+      }
     }
     return;
   }
 
   if (state.phase === "select") {
-    if (regularPressed || (horizontalEdge && horizontalState < 0)) setSelectedMode("regular");
-    if (liquidPressed || (horizontalEdge && horizontalState > 0)) setSelectedMode("liquid");
-    if (primaryPressed) handleDifficultyChoice(state.selectedMode);
+    if ((regularPressed || (horizontalEdge && horizontalState < 0)) && consumeUiAction(now)) setSelectedMode("regular");
+    if ((liquidPressed || (horizontalEdge && horizontalState > 0)) && consumeUiAction(now)) setSelectedMode("liquid");
+    if (primaryPressed && consumeUiAction(now)) handleDifficultyChoice(state.selectedMode);
     if (backPressed) {
-      state.introStage = INTRO_STAGES.length - 1;
-      showIntroScreen();
+      if (consumeUiAction(now)) {
+        state.introStage = INTRO_STAGES.length - 1;
+        showIntroScreen();
+      }
     }
     return;
   }
 
   if (state.phase === "menu") {
-    if (verticalEdge) moveMenu(verticalState < 0 ? -1 : 1);
-    if (primaryPressed) activateMenuChoice();
+    if (verticalEdge && consumeUiAction(now)) moveMenu(verticalState < 0 ? -1 : 1);
+    if (primaryPressed && consumeUiAction(now)) activateMenuChoice();
     if (backPressed || resetPressed) {
-      if (state.previousPhase === "win" || state.previousPhase === "gameover") {
-        showDifficultyScreen();
-      } else {
-        closeGameMenu();
+      if (consumeUiAction(now)) {
+        if (state.previousPhase === "win" || state.previousPhase === "gameover") {
+          showDifficultyScreen();
+        } else {
+          closeGameMenu();
+        }
       }
     }
     return;
@@ -1012,20 +1027,20 @@ function pollGamepad() {
 
   if (state.phase === "win" || state.phase === "gameover") {
     if (state.pendingLeaderboardEntry) {
-      if (horizontalEdge) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
-      if (verticalEdge) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
-      if (primaryPressed || backPressed) trySubmitLeaderboardEntry();
-      if (resetPressed) openGameMenu();
+      if (horizontalEdge && consumeUiAction(now)) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
+      if (verticalEdge && consumeUiAction(now)) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
+      if ((primaryPressed || backPressed) && consumeUiAction(now)) trySubmitLeaderboardEntry();
+      if (resetPressed && consumeUiAction(now)) openGameMenu();
       return;
     }
-    if (primaryPressed || backPressed) showDifficultyScreen();
-    if (resetPressed) openGameMenu();
+    if ((primaryPressed || backPressed) && consumeUiAction(now)) showDifficultyScreen();
+    if (resetPressed && consumeUiAction(now)) openGameMenu();
     return;
   }
 
-  if (regularPressed) handleDifficultyChoice("regular");
-  if (liquidPressed) handleDifficultyChoice("liquid");
-  if (resetPressed || consumePadEdge("menuStart", pads.some((pad) => !!pad.buttons[9]?.pressed))) openGameMenu();
+  if (regularPressed && consumeUiAction(now)) handleDifficultyChoice("regular");
+  if (liquidPressed && consumeUiAction(now)) handleDifficultyChoice("liquid");
+  if ((resetPressed || consumePadEdge("menuStart", pads.some((pad) => !!pad.buttons[9]?.pressed))) && consumeUiAction(now)) openGameMenu();
 
   if (horizontalEdge) state.nextDir = horizontalState < 0 ? "left" : "right";
   if (verticalEdge) state.nextDir = verticalState < 0 ? "up" : "down";
@@ -1267,6 +1282,7 @@ function isIntroAdvanceKey(key) {
 window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(key)) e.preventDefault();
+  if (e.repeat) return;
 
   if (key === "m") {
     state.muted = !state.muted;

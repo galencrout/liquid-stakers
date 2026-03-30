@@ -33,6 +33,7 @@ const PROPOSAL_ART = [
 ];
 const BROADCAST_FLASH_DURATION_MS = 1000;
 const INPUT_COOLDOWN_MS = 350;
+const PRIMARY_DEBOUNCE_MS = 120;
 const MODES = {
   vanilla: {
     key: "vanilla",
@@ -257,6 +258,7 @@ const game = {
   particles: [],
   hudState: { mode: "", bondLabel: "", bond: "", apr: "", fork: "", slot: "", highScore: "" },
   inputCooldownUntil: performance.now() + INPUT_COOLDOWN_MS,
+  lastPrimaryAt: 0,
 };
 
 const renderCache = createRenderCache();
@@ -283,6 +285,7 @@ updateHud();
 requestAnimationFrame(frame);
 
 window.addEventListener("keydown", (event) => {
+  if (event.repeat) return;
   if (game.screen === "gameover" && game.pendingLeaderboardEntry) {
     if (event.code === "ArrowLeft") {
       event.preventDefault();
@@ -536,7 +539,7 @@ function pollGamepad() {
   game.gamepadAxis.vertical = verticalState;
 
   if (game.screen === "playing") {
-    if (primaryPressed) {
+    if (primaryPressed && canUsePrimary(performance.now())) {
       primaryAction();
     }
     if (startPressed || backPressed) {
@@ -1115,6 +1118,12 @@ function armInputCooldown() {
 
 function isInputCoolingDown() {
   return performance.now() < game.inputCooldownUntil;
+}
+
+function canUsePrimary(now) {
+  if (now - game.lastPrimaryAt < PRIMARY_DEBOUNCE_MS) return false;
+  game.lastPrimaryAt = now;
+  return true;
 }
 
 function renderLeaderboardPicker() {

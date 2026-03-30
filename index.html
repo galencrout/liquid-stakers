@@ -58,6 +58,19 @@
         gap: 14px;
       }
 
+      .launch-pad {
+        min-height: 64px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #4d6f9d;
+        background: rgba(8, 18, 34, 0.85);
+        color: #dcecff;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
       .card {
         display: grid;
         gap: 8px;
@@ -79,6 +92,12 @@
 
       .card.is-selected {
         border-color: #9ee3ff;
+        box-shadow: 0 0 0 2px rgba(122, 220, 255, 0.5), 0 10px 28px rgba(53, 121, 194, 0.3);
+      }
+
+      .launch-pad.is-selected {
+        border-color: #9ee3ff;
+        background: rgba(14, 29, 53, 0.92);
         box-shadow: 0 0 0 2px rgba(122, 220, 255, 0.5), 0 10px 28px rgba(53, 121, 194, 0.3);
       }
 
@@ -133,16 +152,23 @@
           <p class="desc">Endless staking runner about keeping your node online and your bond intact under pressure.</p>
         </a>
       </section>
+      <div class="launch-pad" data-launch-pad>Select Game</div>
     </main>
     <script>
       const cards = [...document.querySelectorAll(".card")];
-      let selectedIndex = 0;
+      const launchPad = document.querySelector("[data-launch-pad]");
+      const UI_DEBOUNCE_MS = 260;
+      const OPTION_COUNT = cards.length + 1;
+      let selectedIndex = cards.length;
       let padAxis = 0;
       let padButtons = {};
+      let lastNavAt = 0;
+      let lastLaunchAt = 0;
 
       function selectCard(index) {
-        selectedIndex = (index + cards.length) % cards.length;
+        selectedIndex = (index + OPTION_COUNT) % OPTION_COUNT;
         cards.forEach((card, i) => card.classList.toggle("is-selected", i === selectedIndex));
+        launchPad.classList.toggle("is-selected", selectedIndex === cards.length);
       }
 
       function getConnectedPads() {
@@ -156,10 +182,16 @@
       }
 
       function launchSelected() {
+        if (selectedIndex >= cards.length) return;
         window.location.assign(cards[selectedIndex].href);
       }
 
+      function canUse(lastAt, now) {
+        return now - lastAt >= UI_DEBOUNCE_MS;
+      }
+
       function pollPad() {
+        const now = performance.now();
         const pads = getConnectedPads();
         if (!pads.length) {
           padAxis = 0;
@@ -172,7 +204,10 @@
           return Math.abs(candidate) > Math.abs(value) ? candidate : value;
         }, 0);
         const nextAxis = axis <= -0.45 ? -1 : axis >= 0.45 ? 1 : 0;
-        if (nextAxis !== 0 && nextAxis !== padAxis) selectCard(selectedIndex + nextAxis);
+        if (nextAxis !== 0 && nextAxis !== padAxis && canUse(lastNavAt, now)) {
+          selectCard(selectedIndex + nextAxis);
+          lastNavAt = now;
+        }
         padAxis = nextAxis;
 
         const leftPressed = consumeButtonEdge("left", pads.some((pad) => !!pad.buttons[14]?.pressed));
@@ -181,19 +216,40 @@
           pad.buttons?.some((button, index) => consumeButtonEdge(`button-${index}`, !!button?.pressed)),
         );
 
-        if (leftPressed) selectCard(selectedIndex - 1);
-        if (rightPressed) selectCard(selectedIndex + 1);
-        if (confirmPressed) launchSelected();
+        if (leftPressed && canUse(lastNavAt, now)) {
+          selectCard(selectedIndex - 1);
+          lastNavAt = now;
+        }
+        if (rightPressed && canUse(lastNavAt, now)) {
+          selectCard(selectedIndex + 1);
+          lastNavAt = now;
+        }
+        if (confirmPressed && canUse(lastLaunchAt, now)) {
+          launchSelected();
+          lastLaunchAt = now;
+        }
 
         requestAnimationFrame(pollPad);
       }
 
       window.addEventListener("keydown", (e) => {
-        if (e.key === "ArrowLeft") selectCard(selectedIndex - 1);
-        if (e.key === "ArrowRight") selectCard(selectedIndex + 1);
-        if (e.key === "Enter" || e.key === " ") launchSelected();
+        if (e.repeat) return;
+        const now = performance.now();
+        if (e.key === "ArrowLeft" && canUse(lastNavAt, now)) {
+          selectCard(selectedIndex - 1);
+          lastNavAt = now;
+        }
+        if (e.key === "ArrowRight" && canUse(lastNavAt, now)) {
+          selectCard(selectedIndex + 1);
+          lastNavAt = now;
+        }
+        if ((e.key === "Enter" || e.key === " ") && canUse(lastLaunchAt, now)) {
+          launchSelected();
+          lastLaunchAt = now;
+        }
       });
 
+      selectCard(selectedIndex);
       pollPad();
     </script>
   </body>

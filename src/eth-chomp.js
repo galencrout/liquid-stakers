@@ -57,6 +57,7 @@ const QUEUE_MEAN_MS = 16500;
 const QUEUE_STD_MS = 3200;
 const GAMEPAD_DEADZONE = 0.45;
 const UI_DEBOUNCE_MS = 260;
+const MENU_HOLD_MS = 450;
 const HOME_URL = "./index.html";
 const CHOMP_SCORE = 0.3;
 const GHOST_SCORE = 2;
@@ -183,6 +184,9 @@ const state = {
   gamepadButtons: {},
   gamepadAxis: { horizontal: 0, vertical: 0 },
   startSelectHeld: false,
+  menuButtonHeld: false,
+  menuButtonHeldAt: 0,
+  menuHoldTriggered: false,
   menuIndex: 0,
   menuOptions: [],
   previousPhase: null,
@@ -927,14 +931,19 @@ function pollGamepad() {
     state.gamepadAxis.horizontal = 0;
     state.gamepadAxis.vertical = 0;
     state.startSelectHeld = false;
+    state.menuButtonHeld = false;
+    state.menuButtonHeldAt = 0;
+    state.menuHoldTriggered = false;
     return;
   }
 
+  const startButtonDown = pads.some((pad) => !!pad.buttons[9]?.pressed);
+  const selectButtonDown = pads.some((pad) => !!pad.buttons[8]?.pressed);
   const primaryPressed =
     consumePadEdge("primary0", pads.some((pad) => !!pad.buttons[0]?.pressed)) ||
     consumePadEdge("primary2", pads.some((pad) => !!pad.buttons[2]?.pressed)) ||
-    consumePadEdge("start", pads.some((pad) => !!pad.buttons[9]?.pressed));
-  const resetPressed = consumePadEdge("reset", pads.some((pad) => !!pad.buttons[8]?.pressed));
+    consumePadEdge("start", startButtonDown);
+  const resetPressed = consumePadEdge("reset", selectButtonDown);
   const mutePressed = consumePadEdge("mute", pads.some((pad) => !!pad.buttons[3]?.pressed));
   const backPressed = consumePadEdge("back", pads.some((pad) => !!pad.buttons[1]?.pressed));
   const regularPressed = consumePadEdge("regular", pads.some((pad) => !!pad.buttons[4]?.pressed));
@@ -971,8 +980,7 @@ function pollGamepad() {
   state.gamepadAxis.horizontal = horizontalState;
   state.gamepadAxis.vertical = verticalState;
 
-  const startSelectHeld =
-    pads.some((pad) => !!pad.buttons[8]?.pressed) && pads.some((pad) => !!pad.buttons[9]?.pressed);
+  const startSelectHeld = selectButtonDown && startButtonDown;
   const startSelectPressed = startSelectHeld && !state.startSelectHeld;
   state.startSelectHeld = startSelectHeld;
 
@@ -980,6 +988,23 @@ function pollGamepad() {
     window.location.href = HOME_URL;
     return;
   }
+
+  const menuButtonDown = startButtonDown || selectButtonDown;
+  if (menuButtonDown && !state.menuButtonHeld) {
+    state.menuButtonHeld = true;
+    state.menuButtonHeldAt = now;
+    state.menuHoldTriggered = false;
+  } else if (!menuButtonDown) {
+    state.menuButtonHeld = false;
+    state.menuButtonHeldAt = 0;
+    state.menuHoldTriggered = false;
+  }
+
+  const menuHoldTriggered =
+    !startSelectHeld &&
+    state.menuButtonHeld &&
+    !state.menuHoldTriggered &&
+    now - state.menuButtonHeldAt >= MENU_HOLD_MS;
 
   if (state.phase === "intro") {
     if (
@@ -1030,17 +1055,26 @@ function pollGamepad() {
       if (horizontalEdge && consumeUiAction(now)) moveLeaderboardLetterIndex(horizontalState > 0 ? 1 : -1);
       if (verticalEdge && consumeUiAction(now)) cycleLeaderboardLetter(verticalState < 0 ? 1 : -1);
       if ((primaryPressed || backPressed) && consumeUiAction(now)) trySubmitLeaderboardEntry();
-      if (resetPressed && consumeUiAction(now)) openGameMenu();
+      if (menuHoldTriggered && consumeUiAction(now)) {
+        state.menuHoldTriggered = true;
+        openGameMenu();
+      }
       return;
     }
     if ((primaryPressed || backPressed) && consumeUiAction(now)) showDifficultyScreen();
-    if (resetPressed && consumeUiAction(now)) openGameMenu();
+    if (menuHoldTriggered && consumeUiAction(now)) {
+      state.menuHoldTriggered = true;
+      openGameMenu();
+    }
     return;
   }
 
   if (regularPressed && consumeUiAction(now)) handleDifficultyChoice("regular");
   if (liquidPressed && consumeUiAction(now)) handleDifficultyChoice("liquid");
-  if ((resetPressed || consumePadEdge("menuStart", pads.some((pad) => !!pad.buttons[9]?.pressed))) && consumeUiAction(now)) openGameMenu();
+  if (menuHoldTriggered && consumeUiAction(now)) {
+    state.menuHoldTriggered = true;
+    openGameMenu();
+  }
 
   if (horizontalEdge) state.nextDir = horizontalState < 0 ? "left" : "right";
   if (verticalEdge) state.nextDir = verticalState < 0 ? "up" : "down";

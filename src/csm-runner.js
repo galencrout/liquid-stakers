@@ -41,7 +41,7 @@ const MODES = {
     stakeLabel: "Stake",
     bond: "32 ETH",
     apr: "2.75%",
-    hint: "Space / Up / click / tap flap.",
+    hint: "Space or Up jumps.",
   },
   csm: {
     key: "csm",
@@ -49,7 +49,7 @@ const MODES = {
     stakeLabel: "Bond",
     bond: "1.5 ETH",
     apr: "5.87%",
-    hint: "Space / Up jump.",
+    hint: "Space or Up jumps.",
   },
 };
 
@@ -58,19 +58,19 @@ const INTRO_STAGES = [
     title: "Node Runners",
     body:
       "Welcome to Node Runners, a game about running an Ethereum validator from home. Choose vanilla staking or Lido ICS / CSM staking.",
-    prompt: "Press any key to continue.",
+    prompt: "Press Space to continue.",
   },
   {
     title: "Why It Matters",
     body:
       "With the Lido Community Staking Module, it's easy and lucrative to validate Ethereum from home. Start with only 1.5 ETH and get annual rewards of ~5.87%. Compare this with Vanilla Staking, which requires at least 32 ETH to get started, and only ~2.75% APR.",
-    prompt: "Press any key to continue.",
+    prompt: "Press Space to continue.",
   },
   {
     title: "Rules",
     body:
-      "Attest blocks, propose blocks, and hard fork. Press joystick up or any key to jump. Consistency is key.",
-    prompt: "Choose your game mode. Joystick Up or any key to jump.",
+      "Attest blocks, propose blocks, and hard fork. Press Up or Space to jump. Consistency is key.",
+    prompt: "Use Left and Right to choose a game mode. Press Space to start.",
   },
 ];
 
@@ -196,7 +196,7 @@ app.innerHTML = `
         </div>
       </section>
       <div class="runner-footer">
-        <div class="runner-hint" data-hint>Space / Up / click / tap flap.</div>
+        <div class="runner-hint" data-hint>Keyboard: Space or Up jumps. Left and Right choose menus. Escape opens the menu.</div>
       </div>
     </section>
   </main>
@@ -318,7 +318,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (["Space", "ArrowUp", "Enter"].includes(event.code)) {
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(event.code)) {
     event.preventDefault();
   }
 
@@ -358,7 +358,7 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (overlayState.view === "intro") {
-    if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+    if (["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.code)) {
       event.preventDefault();
       advanceIntro();
     }
@@ -982,10 +982,10 @@ function showTitle() {
   armInputCooldown();
   showOverlay();
   overlayCard.innerHTML = `
-    <h1 class="overlay-title">Choose game mode</h1>
+    <h1 class="overlay-title">Choose Game Mode</h1>
     <div class="mode-grid">
       <button class="mode-card ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="start" data-mode="vanilla">
-        <span class="mode-card-title">vanilla staking</span>
+        <span class="mode-card-title">Vanilla Staking</span>
         <span class="mode-card-metric">Stake: 32 ETH</span>
         <span class="mode-card-metric">APR: 2.75%</span>
         <span class="mode-card-copy">Stake 32 ETH to run a validator with vanilla staking. Earn an estimated 2.75% APR.</span>
@@ -1002,9 +1002,9 @@ function showTitle() {
       ${renderLeaderboard()}
     </div>
     <div class="overlay-actions-row">
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to game select</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to Game Select</button>
     </div>
-    <div class="overlay-menu-hint">Choose your game mode. Joystick Up or any key to jump.</div>
+    <div class="overlay-menu-hint">Use Left and Right to choose. Press Space to start.</div>
   `;
 }
 
@@ -1019,7 +1019,7 @@ function showGameOver() {
       <h2 class="overlay-title">New High Score</h2>
       <p class="overlay-copy overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
       <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-      <div class="entry-hint">Stick left/right selects slot. Up/down changes letters. Move to ENTER and press any button to save.</div>
+      <div class="entry-hint">Use Left and Right to choose a slot. Up and Down change letters. Move to ENTER and press Space to save.</div>
     `;
     return;
   }
@@ -1033,10 +1033,10 @@ function showGameOver() {
     ${renderLeaderboard()}
     <div class="overlay-actions-row">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Start Again</button>
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose game mode</button>
-      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to game select</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>
+      <button class="overlay-button overlay-button--ghost ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to Game Select</button>
     </div>
-    <div class="overlay-menu-hint">Joystick or D-pad chooses. A or Start confirms. B returns to mode select.</div>
+    <div class="overlay-menu-hint">Use Left and Right to choose. Press Space to confirm.</div>
   `;
 }
 
@@ -1076,14 +1076,14 @@ function showPauseMenu() {
   showOverlay();
   overlayCard.innerHTML = `
     <div class="overlay-kicker">${getModeConfig().label}</div>
-    <h2 class="overlay-title">Game menu</h2>
+    <h2 class="overlay-title">Game Menu</h2>
     <div class="overlay-actions-stack">
       <button class="overlay-button ${overlayState.selectedIndex === 0 ? "is-selected" : ""}" type="button" data-overlay-action="resume">Resume</button>
       <button class="overlay-button ${overlayState.selectedIndex === 1 ? "is-selected" : ""}" type="button" data-overlay-action="restart">Restart</button>
-      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose game mode</button>
-      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to game select</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 2 ? "is-selected" : ""}" type="button" data-overlay-action="mode-select">Choose Game Mode</button>
+      <button class="overlay-button ${overlayState.selectedIndex === 3 ? "is-selected" : ""}" type="button" data-overlay-action="game-selector">Back to Game Select</button>
     </div>
-    <div class="overlay-menu-hint">Joystick or D-pad navigates. A or Start confirms. B or Select resumes.</div>
+    <div class="overlay-menu-hint">Use Up and Down to choose. Press Space to confirm. Escape resumes.</div>
   `;
 }
 

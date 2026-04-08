@@ -40,19 +40,19 @@ const INTRO_STAGES = [
     title: "Liquid Stakers",
     body:
       "Welcome to Liquid Stakers, a game about the opportunity cost of waiting through the Ethereum exit queue.",
-    hint: "Press any button to continue.",
+    hint: "Press Space to continue.",
   },
   {
     title: "Why It Matters",
     body:
       "Traditional staking positions can take days or months to unwind. Lido stVaults let you unwind instantly with stETH, and skip the Ethereum Withdrawal Queue",
-    hint: "Press any button to continue.",
+    hint: "Press Space to continue.",
   },
   {
     title: "Rules",
     body:
       "Survive sixty seconds and clear the queue pressure. Blue enemies take one shot, red take two, green take three. If they reach your validator zone, the round ends.",
-    hint: "Press any button to continue.",
+    hint: "Press Space to continue.",
   },
 ];
 
@@ -209,7 +209,7 @@ requestAnimationFrame(frame);
 window.addEventListener("keydown", (event) => {
   input.keys[event.code] = true;
   if (event.repeat) return;
-  if (["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD"].includes(event.code)) {
+  if (["Space", "Enter", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.code)) {
     event.preventDefault();
   }
 
@@ -225,7 +225,7 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (state.screen === "playing") {
-    if (event.code === "Enter") {
+    if (event.code === "Enter" || event.code === "Escape") {
       showPauseMenu();
     }
     return;
@@ -325,17 +325,17 @@ function handleIntroKey(code) {
     return;
   }
 
-  if (code === "ArrowLeft" || code === "KeyA" || code === "Digit1") {
+  if (code === "ArrowLeft") {
     ui.selectedMode = 0;
     showIntro();
     return;
   }
-  if (code === "ArrowRight" || code === "KeyD" || code === "Digit2") {
+  if (code === "ArrowRight") {
     ui.selectedMode = 1;
     showIntro();
     return;
   }
-  if (code !== "Escape") {
+  if (code === "Space" || code === "Enter") {
     startGame(MODES[ui.selectedMode]);
   }
 }
@@ -357,12 +357,12 @@ function handlePauseKey(code) {
 
 function handleGameOverKey(code) {
   if (!consumeUiAction()) return;
-  if (code === "ArrowLeft" || code === "KeyA") {
+  if (code === "ArrowLeft") {
     ui.endIndex = 0;
     showGameOver();
     return;
   }
-  if (code === "ArrowRight" || code === "KeyD") {
+  if (code === "ArrowRight") {
     ui.endIndex = 1;
     showGameOver();
     return;
@@ -863,7 +863,7 @@ function showIntro() {
       <div class="stakers-overlay-hint">${stage.hint}</div>
       <button class="stakers-button stakers-button--primary" type="button" data-action="next-intro">Continue</button>
     `;
-    footerHint.textContent = "Arcade: press any button to continue.";
+    footerHint.textContent = "Keyboard: press Space to continue. Arcade: press any button to continue.";
     return;
   }
 
@@ -885,9 +885,9 @@ function showIntro() {
       <span class="stakers-mode-subtitle">All-Time Top Runs</span>
       ${renderLeaderboard()}
     </div>
-    <div class="stakers-overlay-hint">Press any button to start.</div>
+    <div class="stakers-overlay-hint">Keyboard: use Left and Right to choose, then press Space to start.</div>
   `;
-  footerHint.textContent = "Arcade: stick chooses game mode. Press any button to start. A fires in-round. Start opens menu.";
+  footerHint.textContent = "Keyboard: Left and Right choose, Space starts and fires, Escape opens menu. Arcade: stick chooses and any button starts.";
 }
 
 function showPauseMenu() {
@@ -912,7 +912,7 @@ function showPauseMenu() {
         )
         .join("")}
     </div>
-    <div class="stakers-overlay-hint">Stick up or down chooses. A or Start confirms. B resumes.</div>
+    <div class="stakers-overlay-hint">Keyboard: Up and Down choose, Space confirms, Escape resumes.</div>
   `;
 }
 
@@ -924,7 +924,7 @@ function showHelp() {
   overlayCard.innerHTML = `
     <div class="stakers-overlay-kicker">HELP</div>
     <h2 class="stakers-overlay-title">Controls</h2>
-    <p class="stakers-overlay-copy">Move with the stick or D-pad. Press A to fire. Press Start or Select for the menu. Game mode is chosen before each round. Delegated mode delays your inputs. stVaults does not.</p>
+    <p class="stakers-overlay-copy">Keyboard: Left and Right move, Space fires, Escape opens the menu. Arcade: stick or D-pad moves, A fires, Start opens the menu. Game mode is chosen before each round. Delegated mode delays your inputs. stVaults does not.</p>
     <button class="stakers-button stakers-button--primary" type="button" data-action="close-help">Return</button>
   `;
 }
@@ -940,7 +940,7 @@ function showGameOver() {
       <h2 class="stakers-overlay-title">New High Score</h2>
       <p class="stakers-overlay-copy stakers-overlay-copy--compact">Enter your five-letter ID for the leaderboard.</p>
       <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-      <div class="stakers-overlay-hint">Stick left/right selects slot. Up/down changes letters. Move to ENTER and press any button to save.</div>
+      <div class="stakers-overlay-hint">Use Left and Right to choose a slot. Up and Down change letters. Move to ENTER and press Space to save.</div>
     `;
     return;
   }
@@ -1002,7 +1002,7 @@ function startGame(mode) {
   buildLevel(1);
   queueMessage(mode.badge);
   overlay.classList.add("is-hidden");
-  footerHint.textContent = "Arcade: stick moves. A fires. Start or Select opens menu.";
+  footerHint.textContent = "Keyboard: Left and Right move, Space fires, Escape opens menu. Arcade: stick moves, A fires, Start opens menu.";
   audio.start();
   audio.startMusic();
   updateHud(true);
@@ -1392,7 +1392,7 @@ function trySubmitLeaderboardEntry() {
 }
 
 function getRawMove() {
-  const keyboard = (input.keys.ArrowRight || input.keys.KeyD ? 1 : 0) - (input.keys.ArrowLeft || input.keys.KeyA ? 1 : 0);
+  const keyboard = (input.keys.ArrowRight ? 1 : 0) - (input.keys.ArrowLeft ? 1 : 0);
   return keyboard || input.horizontal;
 }
 

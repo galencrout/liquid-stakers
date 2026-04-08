@@ -27,9 +27,9 @@ app.innerHTML = `
     </section>
 
     <section class="controls">
-      <p>Move: Arcade stick</p>
-      <p>Flow: A or Start continues, L = Regular, R = Liquid, B = back</p>
-      <p>In round: Start or Select opens menu, Start+Select returns to chooser</p>
+      <p>Keyboard: Arrow keys move. Space confirms. Escape opens and closes menus.</p>
+      <p>Arcade: Stick moves. A or Start confirms. B goes back.</p>
+      <p>In round: Space or Start opens the menu.</p>
     </section>
   </main>
 `;
@@ -142,19 +142,19 @@ const INTRO_STAGES = [
     title: "Stake-Man",
     body:
       "Welcome to Stake-Man, a maze game about navigating Ethereum staking. Choose Regular Staking or Liquid Staking with Lido.",
-    prompt: "Press any button to continue.",
+    prompt: "Press Space to continue.",
   },
   {
     title: "Why It Matters",
     body:
       "Lido core lets you skip the Ethereum Entry Queue and start earning rewards immediately. Compare this with Vanilla Staking and Delegated Staking setups, where it can take days or even months to start earning.",
-    prompt: "Press any button to continue.",
+    prompt: "Press Space to continue.",
   },
   {
     title: "Rules",
     body:
       "Chomp every ETH crystal, avoid the pursuers, and use power pellets to flip the chase. Route planning and consistency win the maze.",
-    prompt: "Press any button to continue.",
+    prompt: "Press Space to continue.",
   },
 ];
 
@@ -290,7 +290,7 @@ function showDifficultyScreen() {
         <div class="mode-select-subtitle">All-Time Top Runs</div>
         ${renderLeaderboard()}
       </div>
-      <div class="overlay-footer overlay-footer--intro">Press left or right to choose. Press A or Start to begin.</div>
+      <div class="overlay-footer overlay-footer--intro">Use Left and Right to choose. Press Space to begin.</div>
     </div>
   `;
   overlay.classList.add("show");
@@ -306,7 +306,7 @@ function showEndScreen(kind) {
         <h2>New High Score</h2>
         <div class="overlay-lines"><p>Enter your five-letter ID for the leaderboard.</p></div>
         <div class="entry-picker" data-entry-picker>${renderLeaderboardPicker()}</div>
-        <div class="overlay-footer">Stick left/right selects slot. Up/down changes letters. Move to ENTER and press any button to save.</div>
+        <div class="overlay-footer">Use Left and Right to choose a slot. Up and Down change letters. Move to ENTER and press Space to save.</div>
       </div>
     `;
     overlay.classList.add("show");
@@ -323,7 +323,7 @@ function showEndScreen(kind) {
         </div>
         <div class="mode-select-subtitle">Leaderboard</div>
         ${renderLeaderboard()}
-        <div class="overlay-footer">Press A or B to return to game mode select. Press Start or Select to open the menu.</div>
+        <div class="overlay-footer">Press Space to return to game mode select.</div>
       </div>
     `;
   } else {
@@ -336,7 +336,7 @@ function showEndScreen(kind) {
         </div>
         <div class="mode-select-subtitle">Leaderboard</div>
         ${renderLeaderboard()}
-        <div class="overlay-footer">Press A or B to return to game mode select. Press Start or Select to open the menu.</div>
+        <div class="overlay-footer">Press Space to return to game mode select.</div>
       </div>
     `;
   }
@@ -367,7 +367,7 @@ function renderGameMenu() {
   showOverlay(
     "Game Menu",
     state.menuOptions.map((option, index) => `${index === state.menuIndex ? ">" : " "} ${option.label}`),
-    "Stick: move   A/Start: choose   B: close",
+    "Keyboard: Arrow keys move and navigate. Space chooses. Escape closes.",
     "neutral",
   );
 }
@@ -1302,14 +1302,10 @@ function isIntroAdvanceKey(key) {
   return [
     " ",
     "enter",
-    "arrowleft",
-    "arrowright",
     "arrowup",
     "arrowdown",
-    "a",
-    "d",
-    "w",
-    "s",
+    "arrowleft",
+    "arrowright",
   ].includes(key);
 }
 
@@ -1324,11 +1320,11 @@ window.addEventListener("keydown", (e) => {
   }
 
   if ((state.phase === "win" || state.phase === "gameover") && state.pendingLeaderboardEntry) {
-    if (key === "arrowleft" || key === "a") moveLeaderboardLetterIndex(-1);
-    if (key === "arrowright" || key === "d") moveLeaderboardLetterIndex(1);
-    if (key === "arrowup" || key === "w") cycleLeaderboardLetter(1);
-    if (key === "arrowdown" || key === "s") cycleLeaderboardLetter(-1);
-    if (key === " " || key === "enter" || key === "escape" || key === "b") trySubmitLeaderboardEntry();
+    if (key === "arrowleft") moveLeaderboardLetterIndex(-1);
+    if (key === "arrowright") moveLeaderboardLetterIndex(1);
+    if (key === "arrowup") cycleLeaderboardLetter(1);
+    if (key === "arrowdown") cycleLeaderboardLetter(-1);
+    if (key === " " || key === "enter") trySubmitLeaderboardEntry();
     return;
   }
 
@@ -1338,8 +1334,8 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (state.phase === "select") {
-    if (key === "1" || key === "arrowleft" || key === "a") setSelectedMode("regular");
-    if (key === "2" || key === "arrowright" || key === "d") setSelectedMode("liquid");
+    if (key === "arrowleft") setSelectedMode("regular");
+    if (key === "arrowright") setSelectedMode("liquid");
     if (key === " " || key === "enter") handleDifficultyChoice(state.selectedMode);
     if (key === "escape" || key === "b") {
       state.introStage = INTRO_STAGES.length - 1;
@@ -1349,28 +1345,25 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (state.phase === "menu") {
-    if (key === "arrowup" || key === "w") moveMenu(-1);
-    if (key === "arrowdown" || key === "s") moveMenu(1);
+    if (key === "arrowup") moveMenu(-1);
+    if (key === "arrowdown") moveMenu(1);
     if (key === " " || key === "enter") activateMenuChoice();
     if (key === "escape" || key === "b") closeGameMenu();
     return;
   }
 
   if (state.phase === "win" || state.phase === "gameover") {
-    if (key === " " || key === "enter" || key === "r") showDifficultyScreen();
+    if (key === " " || key === "enter") showDifficultyScreen();
     return;
   }
 
-  if (key === "1") handleDifficultyChoice("regular");
-  if (key === "2") handleDifficultyChoice("liquid");
-  if (key === "r") showDifficultyScreen();
-  if (key === "escape" || key === "tab") openGameMenu();
+  if (key === " " || key === "escape" || key === "tab") openGameMenu();
   if (key === "h") window.location.href = HOME_URL;
 
-  if (key === "arrowleft" || key === "a") state.nextDir = "left";
-  if (key === "arrowright" || key === "d") state.nextDir = "right";
-  if (key === "arrowup" || key === "w") state.nextDir = "up";
-  if (key === "arrowdown" || key === "s") state.nextDir = "down";
+  if (key === "arrowleft") state.nextDir = "left";
+  if (key === "arrowright") state.nextDir = "right";
+  if (key === "arrowup") state.nextDir = "up";
+  if (key === "arrowdown") state.nextDir = "down";
 });
 
 overlay.addEventListener("pointerdown", (event) => {
